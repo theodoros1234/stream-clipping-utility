@@ -1,7 +1,7 @@
 #!/bin/python3
 # This Python file uses the following encoding: utf-8
 import sys
-from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox
+from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu
 
 
 # Main window class
@@ -11,31 +11,40 @@ class MainWindow(QWidget):
         super().__init__()
 
         # Main window layout
-        self.resize(480,480)
+        self.resize(360,320)
         self.setWindowTitle("Stream Clipping Utility")
         self.mainLayout = QVBoxLayout(self)
         self.setLayout(self.mainLayout)
 
         # Login label
-        self.loginLabel = QLabel(self)
-        self.loginLabel.setText("<b>Step 1:</b> Login")
-        self.mainLayout.addWidget(self.loginLabel)
+        self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Login",self))
         # Login layout
-        self.loginLayout = QFormLayout(self)
+        self.loginStatus = QLabel("Not logged in",self)
+        self.loginLayout = QHBoxLayout(self)
+        self.mainLayout.addWidget(self.loginStatus)
         self.mainLayout.addLayout(self.loginLayout)
+        # Login options
+        self.retryButton = QPushButton("Retry",self)
+        self.retryButton.setVisible(False)
+        self.loginButton = QPushButton("Login",self)
+        self.loginLayout.addWidget(self.retryButton)
+        self.loginLayout.addWidget(self.loginButton)
+        self.loginLayout.addStretch()
 
         # Options label
-        self.optionsLabel = QLabel(self)
-        self.optionsLabel.setText("<b>Step 2:</b> Options")
-        self.mainLayout.addWidget(self.optionsLabel)
+        self.mainLayout.addWidget(QLabel("<b>Step 2:</b> Options",self))
         # Options layout
         self.optionsLayout = QFormLayout(self)
         self.mainLayout.addLayout(self.optionsLayout)
         # Options
-        self.keyComboSelect = QKeySequenceEdit()
-        self.clipLength = QSpinBox()
+        self.keyComboSelect = QKeySequenceEdit(self)
+        self.clipLength = QSpinBox(self)
+        self.clipNotif = QCheckBox("Show notification on successful clip")
+        self.errorNotif = QCheckBox("Show notification on error",self)
         self.optionsLayout.addRow(self.tr("Key Combination Trigger:"),self.keyComboSelect)
         self.optionsLayout.addRow(self.tr("Clip length (seconds):"),self.clipLength)
+        self.optionsLayout.addRow(self.clipNotif)
+        self.optionsLayout.addRow(self.errorNotif)
 
         # Button Layout
         self.buttonLayout = QHBoxLayout(self)
@@ -47,8 +56,14 @@ class MainWindow(QWidget):
         self.buttonLayout.addStretch()
         self.buttonLayout.addWidget(self.statusButton)
         self.buttonLayout.addWidget(self.hideButton)
+        
+        # System tray icon
+        #self.trayIcon = QSystemTrayIcon(self)
+        #self.trayMenu = QMenu(self)
+        #self.trayIcon.show()
 
 
+# Main function
 if __name__ == "__main__":
     app = QApplication([])
     window = MainWindow()
