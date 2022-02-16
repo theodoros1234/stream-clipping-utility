@@ -2,4 +2,5 @@
 Desktop app that assigns a global hotkey to take clips for your Twitch live stream.
 
 Dependencies:
-PySide2
+- PySide2
+- keyboard

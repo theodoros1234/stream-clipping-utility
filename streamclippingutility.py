@@ -2,6 +2,7 @@
 # This Python file uses the following encoding: utf-8
 import sys, os
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
+from PySide2.QtGui import QKeySequence
 
 
 config = {}
@@ -23,14 +24,15 @@ class MainWindow(QWidget):
         # Login label
         self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Twitch Login",self))
         # Login layout
-        self.loginStatus = QLabel("Not logged in",self)
+        self.loginStatus = QLabel("Please wait...",self)
         self.loginLayout = QHBoxLayout(self)
         self.mainLayout.addWidget(self.loginStatus)
         self.mainLayout.addLayout(self.loginLayout)
         # Login options
         self.retryButton = QPushButton("Retry",self)
-        self.retryButton.setVisible(False)
         self.loginButton = QPushButton("Login",self)
+        self.retryButton.setEnabled(False)
+        self.loginButton.setEnabled(False)
         self.loginLayout.addWidget(self.retryButton)
         self.loginLayout.addWidget(self.loginButton)
         self.loginLayout.addStretch()
@@ -60,6 +62,7 @@ class MainWindow(QWidget):
         # Buttons
         self.statusButton = QPushButton("Start",self)
         self.hideButton = QPushButton("Minimize to Tray",self)
+        self.statusButton.setEnabled(False)
         self.buttonLayout.addStretch()
         self.buttonLayout.addWidget(self.statusButton)
         self.buttonLayout.addWidget(self.hideButton)
@@ -101,7 +104,7 @@ def load_config(path):
   else:
     config["client-id"] = default_client_id
   if ("token" in config) == False:
-    config["token"] = None
+    config["token"] = ""
   if ("key-combo" in config) == False:
     config["key-combo"] = ""
   if "clip-length" in config:
@@ -136,8 +139,18 @@ def load_config(path):
   # Print config
   print("Loaded values:")
   for item in config.items():
-    print("%s=%s"%(item[0],item[1]))
+    if item[0]=="token":
+      print("token=%s"%('*'*len(item[1])))
+    else:
+      print("%s=%s"%(item[0],item[1]))
   print()
+  
+  # Change GUI elements to match loaded config
+  window.keyComboSelect.setKeySequence(QKeySequence(config["key-combo"]))
+  window.clipLength.setValue(config["clip-length"])
+  window.clipNotif.setChecked(config["clip-notif"])
+  window.errorNotif.setChecked(config["error-notif"])
+  window.trayOnStartup.setChecked(config["tray-on-startup"])
 
 # Main function
 if __name__ == "__main__":
