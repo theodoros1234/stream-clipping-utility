@@ -115,21 +115,21 @@ def load_config(path):
   else:
     config["clip-length"] = 60
   if "clip-notif" in config:
-    if config["clip-notif"] == "false":
+    if config["clip-notif"].lower() == "false":
       config["clip-notif"] = False
     else:
       config["clip-notif"] = True
   else:
     config["clip-notif"] = True
   if "error-notif" in config:
-    if config["error-notif"] == "false":
+    if config["error-notif"].lower() == "false":
       config["error-notif"] = False
     else:
       config["error-notif"] = True
   else:
     config["error-notif"] = True
   if "tray-on-startup" in config:
-    if config["tray-on-startup"] == "true":
+    if config["tray-on-startup"].lower() == "true":
       config["tray-on-startup"] = True
     else:
       config["tray-on-startup"] = False
