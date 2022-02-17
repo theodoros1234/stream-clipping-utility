@@ -2,22 +2,66 @@
 # This Python file uses the following encoding: utf-8
 import sys, os
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
-from PySide2.QtGui import QKeySequence
+from PySide2.QtGui import QKeySequence, QIcon
 
 
 config = {}
 default_client_id = "2ya1fhz3io1xhy9ao03ull3k8wwqff"
 
+# Function that saves config file
+def save_config():
+  path = "app.config"
+  try:
+    config_file = open(path,'w')
+    for item in config.items():
+      # Write each line to the config file
+      config_file.write("%s=%s\n"%(item[0],item[1]))
+    config_file.close()
+    print("Updated config file")
+  except:
+    # Show error message in case something goes wrong
+    window.configErrorDialog.showMessage("Could not save configuration.")
 
 # Main window class
 class MainWindow(QWidget):
+    # Make key sequence valid
+    def keySequenceUpdate(self):
+      seq = self.keyComboSelect.keySequence().toString().lower()
+      prev_plus = False
+      i=0
+      for c in seq:
+        if c=='+':
+          prev_plus=True
+        else:
+          if (prev_plus==False) & (c==','):
+            seq = seq[0:i]
+            break
+          prev_plus=False
+        i+=1
+      config['key-combo']=seq
+      self.keyComboSelect.setKeySequence(QKeySequence(seq))
+      save_config()
+    def clipLengthUpdate(self,val):
+      config['clip-length'] = int(val)
+      save_config()
+    def clipNotifUpdate(self,val):
+      config['clip-notif'] = val
+      save_config()
+    def errorNotifUpdate(self,val):
+      config['error-notif'] = val
+      save_config()
+    def trayOnStartupUpdate(self,val):
+      config['tray-on-startup'] = val
+      save_config()
     # Create window
     def __init__(self):
         super().__init__()
 
         # Main window layout
+        self.appIcon = QIcon("icon.png")
         self.resize(360,320)
         self.setWindowTitle("Stream Clipping Utility")
+        self.setWindowIcon(self.appIcon)
         self.mainLayout = QVBoxLayout(self)
         self.setLayout(self.mainLayout)
 
@@ -68,12 +112,25 @@ class MainWindow(QWidget):
         self.buttonLayout.addWidget(self.hideButton)
         
         # System tray icon
-        #self.trayIcon = QSystemTrayIcon(self)
-        #self.trayMenu = QMenu(self)
-        #self.trayIcon.show()
+        self.trayIcon = QSystemTrayIcon(self)
+        self.trayIcon.setIcon(self.appIcon)
+        self.trayMenu = QMenu(self)
         
         # Config error message dialog
         self.configErrorDialog = QErrorMessage(self)
+        
+        # Slots
+        self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
+        self.clipLength.textChanged.connect(self.clipLengthUpdate)
+        self.clipNotif.toggled.connect(self.clipNotifUpdate)
+        self.errorNotif.toggled.connect(self.errorNotifUpdate)
+        self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
+        
+        self.hideButton.released.connect(self.trayIcon.show)
+        self.hideButton.released.connect(self.hide)
+        
+        self.trayIcon.activated.connect(self.show)
+        self.trayIcon.activated.connect(self.trayIcon.hide)
 
 
 # Function that loads a config file, and changes appropriate widgets on the main window to match the current configuration
@@ -157,6 +214,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     load_config("app.config")
-    if config["tray-on-startup"] == False:
+    if config["tray-on-startup"]:
+      window.trayIcon.show()
+      window.trayIcon.showMessage("Stream Clipping Utility","Application has started hidden in tray.",window.appIcon)
+    else:
       window.show()
     sys.exit(app.exec_())
