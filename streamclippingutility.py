@@ -1,12 +1,13 @@
 #!/bin/python3
 # This Python file uses the following encoding: utf-8
-import sys, os
+import sys, os, http.client, http.server, urllib.parse, json, string, random, threading
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
 from PySide2.QtGui import QKeySequence, QIcon
 
 
 config = {}
 default_client_id = "2ya1fhz3io1xhy9ao03ull3k8wwqff"
+
 
 # Function that saves config file
 def save_config():
@@ -22,8 +23,43 @@ def save_config():
     # Show error message in case something goes wrong
     window.configErrorDialog.showMessage("Could not save configuration.")
 
+
+# Twitch integration class
+class twitchIntegration():
+  # Init function
+  def __init__(self):
+    self.authComm = http.client.HTTPSConnection("id.twitch.tv")
+    self.apiComm = http.client.HTTPSConnection("api.twitch.tv")
+    self.status = 1
+    self.username = ""
+    # status 0: Not logged in
+    # status 1: Validating token/login status
+    # status 2: Waiting to receive login token from web browser
+    # status 3: Internet unavailable
+    # status 4: Logged in
+  # Check login status
+  def checkStatus(self):
+    self.status=1
+    if config['token']=="":
+      self.status=0
+    else:
+      hd = {"Authorization": "Bearer " + config['token']}
+      print(hd)
+      self.authComm.request('GET',"/oauth2/validate",headers=hd)
+      response = self.authComm.getresponse()
+      #if response.status == 200:
+      text = response.read()#json.loads(response.status)
+      print(text)
+  def login(self):
+    self.stateToken = ''.join(random.choices(string.ascii_letters+string.digits,k=32))
+    authComm.request('GET',"oauth2/authorize")
+
+
 # Main window class
 class MainWindow(QWidget):
+    # When closing window, 
+    def closeEvent(self,event):
+      self.trayIcon.hide()
     # Make key sequence valid
     def keySequenceUpdate(self):
       seq = self.keyComboSelect.keySequence().toString().lower()
@@ -41,8 +77,9 @@ class MainWindow(QWidget):
       config['key-combo']=seq
       self.keyComboSelect.setKeySequence(QKeySequence(seq))
       save_config()
+      check_start_requirements()
     def clipLengthUpdate(self,val):
-      config['clip-length'] = int(val)
+      config['clip-length'] = val
       save_config()
     def clipNotifUpdate(self,val):
       config['clip-notif'] = val
@@ -75,10 +112,13 @@ class MainWindow(QWidget):
         # Login options
         self.retryButton = QPushButton("Retry",self)
         self.loginButton = QPushButton("Login",self)
+        self.cancelButton = QPushButton("Cancel",self)
         self.retryButton.setEnabled(False)
         self.loginButton.setEnabled(False)
+        self.cancelButton.setEnabled(False)
         self.loginLayout.addWidget(self.retryButton)
         self.loginLayout.addWidget(self.loginButton)
+        self.loginLayout.addWidget(self.cancelButton)
         self.loginLayout.addStretch()
 
         # Options label
@@ -121,16 +161,13 @@ class MainWindow(QWidget):
         
         # Slots
         self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
-        self.clipLength.textChanged.connect(self.clipLengthUpdate)
+        self.clipLength.valueChanged.connect(self.clipLengthUpdate)
         self.clipNotif.toggled.connect(self.clipNotifUpdate)
         self.errorNotif.toggled.connect(self.errorNotifUpdate)
         self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
         
-        self.hideButton.released.connect(self.trayIcon.show)
         self.hideButton.released.connect(self.hide)
-        
         self.trayIcon.activated.connect(self.show)
-        self.trayIcon.activated.connect(self.trayIcon.hide)
 
 
 # Function that loads a config file, and changes appropriate widgets on the main window to match the current configuration
@@ -213,10 +250,13 @@ def load_config(path):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
+    twitch = twitchIntegration()
+    
     load_config("app.config")
+    window.trayIcon.show()
     if config["tray-on-startup"]:
-      window.trayIcon.show()
       window.trayIcon.showMessage("Stream Clipping Utility","Application has started hidden in tray.",window.appIcon)
     else:
       window.show()
+    threading.Thread(target=twitch.checkStatus).start()
     sys.exit(app.exec_())
