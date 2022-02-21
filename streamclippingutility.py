@@ -29,151 +29,258 @@ class twitchIntegration():
   # Init function
   def __init__(self):
     self.authComm = http.client.HTTPSConnection("id.twitch.tv")
-    self.apiComm = http.client.HTTPSConnection("api.twitch.tv")
     self.status = 1
+    self.error = 0
+    self.cancelling = False
     self.username = ""
     # status 0: Not logged in
     # status 1: Validating token/login status
     # status 2: Waiting to receive login token from web browser
-    # status 3: Internet unavailable
+    # status 3: Server connection error
     # status 4: Logged in
-  #def changeStatus(self,new)
+  # Changes login status and triggers everything that also needs to be updated
+  def changeStatus(self,new):
+    self.status = int(new)
+    print("Updated login status to",new)
+    window.updateLoginStatus()
+  # Receives an error code and sets the appropriate error message and status code
+  def loginError(self,errcode):
+    # 0: Could not connect to server
+    # 1: Invalid response from server
+    # 2: Cancelled by user
+    self.error = errcode
+    self.changeStatus(3)
+  def cancel(self):
+    self.cancelling = True
+    if self.status==1:
+      self.authComm.close()
   # Check login status
   def checkStatus(self):
-    self.status=1
+    self.cancelling = False
+    self.changeStatus(1)
     if config['token']=="":
-      self.status=0
+      self.changeStatus(0)
     else:
-      hd = {"Authorization": "Bearer " + config['token']}
-      print(hd)
-      self.authComm.request('GET',"/oauth2/validate",headers=hd)
-      response = self.authComm.getresponse()
-      #if response.status == 200:
-      text = response.read()#json.loads(response.status)
-      print(text)
+      # Verify that token doesn't contain any invalid characters
+      invalid=False
+      for i in config['token']:
+        if (i in string.ascii_lowercase+string.digits)==False:
+          invalid=True
+          break
+      # If token is invalid, assume the user is not logged in and halt function execution
+      if invalid:
+        print("Invalid characters found in token")
+        self.changeStatus(0)
+        return
+      # Try connecting to twitch for verification
+      try:
+        print("Verifying twitch access token")
+        hd = {"Authorization": "Bearer " + config['token']}
+        self.authComm.request('GET',"/oauth2/validate",headers=hd)
+        response = self.authComm.getresponse()
+        print("Received response")
+        # Status indicates verification success
+        if response.status == 200:
+          try:
+            data = json.loads(response.read())
+            # Store username
+            self.username = data['login']
+            # Verify that the appropriate scopes are allowed, otherwise consider user as not logged in
+            if 'clips:edit' in data['scopes']:
+              print("Valid token with sufficient permissions")
+              self.changeStatus(4)
+            else:
+              print("Valid token, but with insufficient permissions")
+              self.changeStatus(0)
+          except:
+            # Response is invalid
+            print("Invalid response received")
+            self.loginError(1)
+        # Status indicates invalid token, which means user is not logged in
+        elif response.status == 401:
+          print("Invalid token")
+          self.changeStatus(0)
+        # Response is invalid if reponse status is unexpected
+        else:
+          print("Invalid response status received")
+          self.loginError(1)
+      # Error connecting to the server
+      except:
+        if self.cancelling:
+          print("Cancelled")
+          self.loginError(2)
+        else:
+          print("Could not connect to server")
+          self.loginError(0)
   def login(self):
+    self.cancelling = False
+    self.changeStatus(2)
     self.stateToken = ''.join(random.choices(string.ascii_letters+string.digits,k=32))
-    authComm.request('GET',"oauth2/authorize")
 
 
 # Main window class
 class MainWindow(QWidget):
-    # When closing window, 
-    def closeEvent(self,event):
-      self.trayIcon.hide()
-    # Toggle window visibility
-    def toggleWindow(self):
-      self.setVisible(self.isHidden())
-    # Make key sequence valid
-    def keySequenceUpdate(self):
-      seq = self.keyComboSelect.keySequence().toString().lower()
-      prev_plus = False
-      i=0
-      for c in seq:
-        if c=='+':
-          prev_plus=True
-        else:
-          if (prev_plus==False) & (c==','):
-            seq = seq[0:i]
-            break
-          prev_plus=False
-        i+=1
-      config['key-combo']=seq
-      self.keyComboSelect.setKeySequence(QKeySequence(seq))
-      save_config()
-      check_start_requirements()
-    def clipLengthUpdate(self,val):
-      config['clip-length'] = val
-      save_config()
-    def clipNotifUpdate(self,val):
-      config['clip-notif'] = val
-      save_config()
-    def errorNotifUpdate(self,val):
-      config['error-notif'] = val
-      save_config()
-    def trayOnStartupUpdate(self,val):
-      config['tray-on-startup'] = val
-      save_config()
-    # Create window
-    def __init__(self):
-        super().__init__()
+  # When closing window, 
+  def closeEvent(self,event):
+    self.trayIcon.hide()
+  # Toggle window visibility
+  def toggleWindow(self):
+    self.setVisible(self.isHidden())
+  # Make key sequence valid
+  def keySequenceUpdate(self):
+    seq = self.keyComboSelect.keySequence().toString().lower()
+    prev_plus = False
+    i=0
+    for c in seq:
+      if c=='+':
+        prev_plus=True
+      else:
+        if (prev_plus==False) & (c==','):
+          seq = seq[0:i]
+          break
+        prev_plus=False
+      i+=1
+    config['key-combo']=seq
+    self.keyComboSelect.setKeySequence(QKeySequence(seq))
+    save_config()
+    check_start_requirements()
+  def clipLengthUpdate(self,val):
+    config['clip-length'] = val
+    save_config()
+  def clipNotifUpdate(self,val):
+    config['clip-notif'] = val
+    save_config()
+  def errorNotifUpdate(self,val):
+    config['error-notif'] = val
+    save_config()
+  def trayOnStartupUpdate(self,val):
+    config['tray-on-startup'] = val
+    save_config()
+  # Updates login status label
+  def updateLoginStatus(self):
+    retryEnable = False
+    loginEnable = False
+    cancelEnable = False
+    loginText = ""
+    if twitch.status==0:
+      msg = "Not logged in"
+      self.loginButton.setText("Login")
+      loginEnable = True
+    elif twitch.status==1:
+      msg = "Logging in..."
+      cancelEnable = True
+    elif twitch.status==2:
+      msg = "Waiting for response from browser..."
+      cancelEnable = True
+    elif twitch.status==3:
+      self.loginButton.setText("Switch user")
+      retryEnable = True
+      loginEnable = True
+      if twitch.error==0:
+        msg = "Could not connect to Twitch servers, check your internet connection."
+      elif twitch.error==1:
+        msg = "Invalid response received from server."
+      elif twitch.error==2:
+        msg = "Connection cancelled."
+      else:
+        msg = "Unknown error occured."
+    elif twitch.status==4:
+      msg = "Logged in as " + twitch.username
+      self.loginButton.setText("Switch user")
+      loginEnable = True
+    self.loginStatus.setText(msg)
+    self.retryButton.setEnabled(retryEnable)
+    self.loginButton.setEnabled(loginEnable)
+    self.cancelButton.setEnabled(cancelEnable)
+    #self.loginButton.repaint()
+    #self.retryButton.repaint()
+    #self.cancelButton.repaint()
+  # Create window
+  def __init__(self):
+      super().__init__()
 
-        # Main window layout
-        self.appIcon = QIcon("icon.png")
-        self.resize(360,320)
-        self.setWindowTitle("Stream Clipping Utility")
-        self.setWindowIcon(self.appIcon)
-        self.mainLayout = QVBoxLayout(self)
-        self.setLayout(self.mainLayout)
+      # Main window layout
+      self.appIcon = QIcon("icon.png")
+      self.resize(360,400)
+      self.setWindowTitle("Stream Clipping Utility")
+      self.setWindowIcon(self.appIcon)
+      self.mainLayout = QVBoxLayout(self)
+      self.setLayout(self.mainLayout)
 
-        # Login label
-        self.mainLayout.addStretch()
-        self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Twitch Login",self))
-        # Login layout
-        self.loginStatus = QLabel("Please wait...",self)
-        self.loginLayout = QHBoxLayout(self)
-        self.mainLayout.addWidget(self.loginStatus)
-        self.mainLayout.addLayout(self.loginLayout)
-        # Login options
-        self.retryButton = QPushButton("Retry",self)
-        self.loginButton = QPushButton("Login",self)
-        self.cancelButton = QPushButton("Cancel",self)
-        self.retryButton.setEnabled(False)
-        self.loginButton.setEnabled(False)
-        self.cancelButton.setEnabled(False)
-        self.loginLayout.addWidget(self.retryButton)
-        self.loginLayout.addWidget(self.loginButton)
-        self.loginLayout.addWidget(self.cancelButton)
-        self.loginLayout.addStretch()
+      # Login label
+      self.mainLayout.addStretch()
+      self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Twitch Login",self))
+      # Login layout
+      self.loginStatus = QLabel("Please wait...",self)
+      self.loginStatus.setWordWrap(True)
+      self.loginLayout = QHBoxLayout(self)
+      self.mainLayout.addWidget(self.loginStatus)
+      self.mainLayout.addLayout(self.loginLayout)
+      # Login options
+      self.retryButton = QPushButton("Retry",self)
+      self.loginButton = QPushButton("Login",self)
+      self.cancelButton = QPushButton("Cancel",self)
+      self.retryButton.setEnabled(False)
+      self.loginButton.setEnabled(False)
+      self.cancelButton.setEnabled(False)
+      self.loginLayout.addWidget(self.retryButton)
+      self.loginLayout.addWidget(self.loginButton)
+      self.loginLayout.addWidget(self.cancelButton)
+      self.loginLayout.addStretch()
 
-        # Options label
-        self.mainLayout.addStretch()
-        self.mainLayout.addWidget(QLabel("<b>Step 2:</b> Options",self))
-        # Options layout
-        self.optionsLayout = QFormLayout(self)
-        self.mainLayout.addLayout(self.optionsLayout)
-        # Options
-        self.keyComboSelect = QKeySequenceEdit(self)
-        self.clipLength = QSpinBox(self)
-        self.clipLength.setRange(5,60)
-        self.clipNotif = QCheckBox("Show notification on successful clip",self)
-        self.errorNotif = QCheckBox("Show notification on error",self)
-        self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
-        self.optionsLayout.addRow(self.tr("Key Combination Trigger:"),self.keyComboSelect)
-        self.optionsLayout.addRow(self.tr("Clip length (seconds):"),self.clipLength)
-        self.optionsLayout.addRow(self.clipNotif)
-        self.optionsLayout.addRow(self.errorNotif)
-        self.optionsLayout.addRow(self.trayOnStartup)
+      # Options label
+      self.mainLayout.addStretch()
+      self.mainLayout.addWidget(QLabel("<b>Step 2:</b> Options",self))
+      # Options layout
+      self.optionsLayout = QFormLayout(self)
+      self.mainLayout.addLayout(self.optionsLayout)
+      # Options
+      self.keyComboSelect = QKeySequenceEdit(self)
+      self.clipLength = QSpinBox(self)
+      self.clipLength.setRange(5,60)
+      self.clipNotif = QCheckBox("Show notification on successful clip",self)
+      self.errorNotif = QCheckBox("Show notification on error",self)
+      self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
+      self.optionsLayout.addRow(self.tr("Key Combination Trigger:"),self.keyComboSelect)
+      self.optionsLayout.addRow(self.tr("Clip length (seconds):"),self.clipLength)
+      self.optionsLayout.addRow(self.clipNotif)
+      self.optionsLayout.addRow(self.errorNotif)
+      self.optionsLayout.addRow(self.trayOnStartup)
 
-        # Button Layout
-        self.buttonLayout = QHBoxLayout(self)
-        self.mainLayout.addStretch()
-        self.mainLayout.addLayout(self.buttonLayout)
-        # Buttons
-        self.statusButton = QPushButton("Start",self)
-        self.hideButton = QPushButton("Minimize to Tray",self)
-        self.statusButton.setEnabled(False)
-        self.buttonLayout.addStretch()
-        self.buttonLayout.addWidget(self.statusButton)
-        self.buttonLayout.addWidget(self.hideButton)
-        
-        # System tray icon
-        self.trayIcon = QSystemTrayIcon(self)
-        self.trayIcon.setIcon(self.appIcon)
-        self.trayMenu = QMenu(self)
-        
-        # Config error message dialog
-        self.configErrorDialog = QErrorMessage(self)
-        
-        # Slots
-        self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
-        self.clipLength.valueChanged.connect(self.clipLengthUpdate)
-        self.clipNotif.toggled.connect(self.clipNotifUpdate)
-        self.errorNotif.toggled.connect(self.errorNotifUpdate)
-        self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
-        
-        self.hideButton.released.connect(self.hide)
-        self.trayIcon.activated.connect(self.toggleWindow)
+      # Button Layout
+      self.buttonLayout = QHBoxLayout(self)
+      self.mainLayout.addStretch()
+      self.mainLayout.addLayout(self.buttonLayout)
+      # Buttons
+      self.statusButton = QPushButton("Start",self)
+      self.hideButton = QPushButton("Minimize to Tray",self)
+      self.statusButton.setEnabled(False)
+      self.buttonLayout.addStretch()
+      self.buttonLayout.addWidget(self.statusButton)
+      self.buttonLayout.addWidget(self.hideButton)
+      
+      # System tray icon
+      self.trayIcon = QSystemTrayIcon(self)
+      self.trayIcon.setIcon(self.appIcon)
+      self.trayMenu = QMenu(self)
+      
+      # Config error message dialog
+      self.configErrorDialog = QErrorMessage(self)
+
+  def initSlots(self):
+    # Slots
+    self.retryButton.released.connect(twitch.checkStatus)
+    self.loginButton.released.connect(twitch.login)
+    self.cancelButton.released.connect(twitch.cancel)
+    
+    self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
+    self.clipLength.valueChanged.connect(self.clipLengthUpdate)
+    self.clipNotif.toggled.connect(self.clipNotifUpdate)
+    self.errorNotif.toggled.connect(self.errorNotifUpdate)
+    self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
+    
+    self.hideButton.released.connect(self.hide)
+    self.trayIcon.activated.connect(self.toggleWindow)
 
 
 # Function that loads a config file, and changes appropriate widgets on the main window to match the current configuration
@@ -257,6 +364,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     twitch = twitchIntegration()
+    window.initSlots()
     
     load_config("app.config")
     window.trayIcon.show()
