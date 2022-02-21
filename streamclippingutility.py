@@ -37,6 +37,7 @@ class twitchIntegration():
     # status 2: Waiting to receive login token from web browser
     # status 3: Internet unavailable
     # status 4: Logged in
+  #def changeStatus(self,new)
   # Check login status
   def checkStatus(self):
     self.status=1
@@ -60,6 +61,9 @@ class MainWindow(QWidget):
     # When closing window, 
     def closeEvent(self,event):
       self.trayIcon.hide()
+    # Toggle window visibility
+    def toggleWindow(self):
+      self.setVisible(self.isHidden())
     # Make key sequence valid
     def keySequenceUpdate(self):
       seq = self.keyComboSelect.keySequence().toString().lower()
@@ -103,6 +107,7 @@ class MainWindow(QWidget):
         self.setLayout(self.mainLayout)
 
         # Login label
+        self.mainLayout.addStretch()
         self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Twitch Login",self))
         # Login layout
         self.loginStatus = QLabel("Please wait...",self)
@@ -122,6 +127,7 @@ class MainWindow(QWidget):
         self.loginLayout.addStretch()
 
         # Options label
+        self.mainLayout.addStretch()
         self.mainLayout.addWidget(QLabel("<b>Step 2:</b> Options",self))
         # Options layout
         self.optionsLayout = QFormLayout(self)
@@ -167,7 +173,7 @@ class MainWindow(QWidget):
         self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
         
         self.hideButton.released.connect(self.hide)
-        self.trayIcon.activated.connect(self.show)
+        self.trayIcon.activated.connect(self.toggleWindow)
 
 
 # Function that loads a config file, and changes appropriate widgets on the main window to match the current configuration
