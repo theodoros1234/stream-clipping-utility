@@ -1,6 +1,6 @@
 #!/bin/python3
 # This Python file uses the following encoding: utf-8
-import sys, os, http.client, http.server, urllib.parse, json, string, random, threading
+import sys, os, http.client, http.server, urllib.parse, json, string, random, threading, webbrowser
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
 from PySide2.QtGui import QKeySequence, QIcon
 
@@ -26,9 +26,35 @@ def save_config():
 
 # Twitch integration class
 class twitchIntegration():
+  # Login server request handler
+  class requestHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+      parsed = urllib.parse.urlparse(self.path)
+      query = urllib.parse.parse_qs(parsed.query)
+      if parsed.path == "/auth_redirect":
+        self.send_response(200)
+        self.send_header("Content-type","text/html")
+        self.end_headers()
+        self.wfile.write(bytes(open("auth_redirect.html","r").read(),'utf-8'))
+        if query!={}:
+          print(query)
+      elif parsed.path == "/submit_info":
+        self.send_response(401)
+        self.end_headers()
+      else:
+        self.send_response(404)
+        self.end_headers()
+    def do_POST(self):
+      parsed = urllib.parse.urlparse(self.path)
+      content_length = int(self.headers['Content-Length'])
+      data = urllib.parse.parse_qs(self.rfile.read(content_length))
+      print(data)
+      #if parsed.path == "/submit_info":
+  
   # Init function
   def __init__(self):
     self.authComm = http.client.HTTPSConnection("id.twitch.tv")
+    self.loginServer = None
     self.status = 1
     self.error = 0
     self.cancelling = False
@@ -38,22 +64,35 @@ class twitchIntegration():
     # status 2: Waiting to receive login token from web browser
     # status 3: Server connection error
     # status 4: Logged in
+    
   # Changes login status and triggers everything that also needs to be updated
   def changeStatus(self,new):
     self.status = int(new)
     print("Updated login status to",new)
     window.updateLoginStatus()
+    
   # Receives an error code and sets the appropriate error message and status code
   def loginError(self,errcode):
     # 0: Could not connect to server
     # 1: Invalid response from server
     # 2: Cancelled by user
+    # 3: Could not set up local server for listening to browser response for token id
     self.error = errcode
     self.changeStatus(3)
+  
   def cancel(self):
     self.cancelling = True
     if self.status==1:
       self.authComm.close()
+    elif self.status==2:
+      self.loginServer.shutdown()
+  
+  def retry(self):
+    if self.error==3:
+      self.login()
+    else:
+      self.checkStatus()
+  
   # Check login status
   def checkStatus(self):
     self.cancelling = False
@@ -112,10 +151,32 @@ class twitchIntegration():
         else:
           print("Could not connect to server")
           self.loginError(0)
+  
   def login(self):
     self.cancelling = False
     self.changeStatus(2)
+    port = 59490
+    setup_success = False
+    for port in range(59490,59500):
+      try:
+        self.loginServer = http.server.HTTPServer(('127.0.0.1',port),self.requestHandler)
+        setup_success = True
+        break
+      except:
+        pass
     self.stateToken = ''.join(random.choices(string.ascii_letters+string.digits,k=32))
+    params = {
+      "client_id": config['client-id'],
+      "redirect_uri": "http://localhost:%i/auth_redirect"%(port),
+      "response_type": "token",
+      "scope": "clips:edit",
+      "force_verify": "true",
+      "state": self.stateToken
+    }
+    link = "https://id.twitch.tv/oauth2/authorize?" + urllib.parse.urlencode(params)
+    webbrowser.open(link)
+    threading.Thread(target=self.loginServer.serve_forever,daemon=True).start()
+    print("Listening for response on port",port)
 
 
 # Main window class
@@ -269,7 +330,7 @@ class MainWindow(QWidget):
 
   def initSlots(self):
     # Slots
-    self.retryButton.released.connect(twitch.checkStatus)
+    self.retryButton.released.connect(twitch.retry)
     self.loginButton.released.connect(twitch.login)
     self.cancelButton.released.connect(twitch.cancel)
     
@@ -372,5 +433,5 @@ if __name__ == "__main__":
       window.trayIcon.showMessage("Stream Clipping Utility","Application has started hidden in tray.",window.appIcon)
     else:
       window.show()
-    threading.Thread(target=twitch.checkStatus).start()
+    threading.Thread(target=twitch.checkStatus,daemon=True).start()
     sys.exit(app.exec_())
