@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Redirect - Stream Clipping Utility</title>
+  </head>
+  <body>
+    <noscript>
+      JavaScript appears to be disabled. To continue, please enable JavaScript in browser settings, or use a different browser.
+    </noscript>
+    <p id='label'></p>
+    <script>
+      var label = document.getElementById('label');
+      label.innerHTML = "Sending data back to the application, please wait...";
+      var data = document.location.hash.substring(1);
+      var http = new XMLHttpRequest();
+      
+      if (data=="")
+        label.innerHTML = "Login cancelled. You may now close this tab."
+      else {
+        http.onreadystatechange = function() {
+          if (this.readyState === XMLHttpRequest.DONE) {
+            if (this.status === 200)
+              label.innerHTML = "Successful log in. You may now close this tab."
+            else
+              label.innerHTML = "Unknown error occured, please close this tab and try again."
+          }
+        }
+        
+        http.open("POST","/submit_info")
+        http.setRequestHeader("Content-Type","application/x-www-form-urlencoded")
+        http.send(data)
+      }
+    </script>
+  </body>
+</html>
