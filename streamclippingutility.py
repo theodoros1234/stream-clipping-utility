@@ -2,7 +2,7 @@
 # This Python file uses the following encoding: utf-8
 import sys, os, http.client, http.server, urllib.parse, json, string, random, threading, webbrowser
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
-from PySide2.QtGui import QKeySequence, QIcon
+from PySide2.QtGui import QKeySequence, QIcon, Qt
 
 
 config = {}
@@ -26,6 +26,13 @@ def save_config():
 
 # Twitch integration class
 class twitchIntegration():
+  # Login response from browser received
+  def receivedLoginResponse(self):
+    print("Stopping server and returning to application")
+    self.loginServer.server_close()
+    window.raise_()
+    window.activateWindow()
+    self.checkStatus()
   # Login server request handler
   class requestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -36,8 +43,13 @@ class twitchIntegration():
         self.send_header("Content-type","text/html")
         self.end_headers()
         self.wfile.write(bytes(open("auth_redirect.html","r").read(),'utf-8'))
-        if query!={}:
-          print(query)
+        try:
+          if query['error'][0] == 'access_denied':
+            twitch.cancel()
+            window.raise_()
+            window.activateWindow()
+        except:
+          pass
       elif parsed.path == "/submit_info":
         self.send_response(401)
         self.end_headers()
@@ -46,14 +58,26 @@ class twitchIntegration():
         self.end_headers()
     def do_POST(self):
       parsed = urllib.parse.urlparse(self.path)
-      content_length = int(self.headers['Content-Length'])
-      data = urllib.parse.parse_qs(self.rfile.read(content_length))
-      print(data)
-      #if parsed.path == "/submit_info":
+      if parsed.path == "/submit_info":
+        content_length = int(self.headers['Content-Length'])
+        data = urllib.parse.parse_qs(self.rfile.read(content_length))
+        key = "access_token".encode('utf-8')
+        try:
+          config['token'] = data[key][0].decode()
+          self.send_response(200)
+          threading.Thread(target=twitch.receivedLoginResponse,daemon=True).start()
+          save_config()
+        except:
+          self.end_headers()
+          self.send_response(401)
+          self.end_headers()
+      else:
+        self.send_response(401)
+        self.end_headers()
   
   # Init function
   def __init__(self):
-    self.authComm = http.client.HTTPSConnection("id.twitch.tv")
+    self.authComm = http.client.HTTPSConnection("id.twitch.tv",timeout=10)
     self.loginServer = None
     self.status = 1
     self.error = 0
@@ -85,7 +109,8 @@ class twitchIntegration():
     if self.status==1:
       self.authComm.close()
     elif self.status==2:
-      self.loginServer.shutdown()
+      self.loginServer.server_close()
+      self.checkStatus()
   
   def retry(self):
     if self.error==3:
