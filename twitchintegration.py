@@ -3,6 +3,7 @@ import http.client, http.server, string, random, json, urllib.parse, threading, 
 
 # Twitch integration class
 class twitchIntegration():
+  
   # Login response from browser received
   def receivedLoginResponse(self):
     print("Stopping server and returning to application")
@@ -10,44 +11,70 @@ class twitchIntegration():
     if self.raiseWindow != None:
       self.raiseWindow()
     self.checkStatus()
+  
   # Login server request handler
   class requestHandler(http.server.BaseHTTPRequestHandler):
+    # GET method
     def do_GET(self):
+      # Get URL data
       parsed = urllib.parse.urlparse(self.path)
       query = urllib.parse.parse_qs(parsed.query)
+      # Redirect page
       if parsed.path == "/auth_redirect":
         self.send_response(200)
         self.send_header("Content-type","text/html")
         self.end_headers()
         self.wfile.write(bytes(open("auth_redirect.html","r").read(),'utf-8'))
+        # Check if login was cancelled from the Twitch page
         try:
-          if query['error'][0] == 'access_denied':
+          # Only cancel if state value is set correctly
+          if query['error'][0] == 'access_denied' and query['state'][0] == self.parent.stateToken:
             self.parent.cancel()
             if self.parent.raiseWindow != None:
               self.parent.raiseWindow()
         except:
           pass
+      # Data receiver page (POST method should be used, so this responds with an error)
       elif parsed.path == "/submit_info":
         self.send_response(401)
         self.end_headers()
+      # Invalid page
       else:
         self.send_response(404)
         self.end_headers()
+    
+    # POST method
     def do_POST(self):
+      # Parse data from URL
       parsed = urllib.parse.urlparse(self.path)
+      # Data receiver page
       if parsed.path == "/submit_info":
+        # Parse data from request body
         content_length = int(self.headers['Content-Length'])
         data = urllib.parse.parse_qs(self.rfile.read(content_length))
         key = "access_token".encode('utf-8')
         try:
-          self.parent.config.values['token'] = data[key][0].decode()
+          # Interrupt communication if state value doesn't match
+          if 'state'.encode('utf-8') in data:
+            if data['state'.encode('utf-8')][0] != self.parent.stateToken.encode('utf-8'):
+              self.send_response(401)
+              self.end_headers()
+              return
+          else:
+            self.send_response(401)
+            self.end_headers()
+            return
           self.send_response(200)
+          # Store token, save config and verify login
+          self.parent.config.values['token'] = data[key][0].decode()
           threading.Thread(target=self.parent.receivedLoginResponse,daemon=True).start()
           self.parent.config.saveConfig()
         except:
+          # Request was missing required parameters
           self.end_headers()
           self.send_response(401)
           self.end_headers()
+      # Invalid page requested
       else:
         self.send_response(401)
         self.end_headers()
@@ -165,11 +192,13 @@ class twitchIntegration():
           print("Could not connect to server")
           self.loginError(0)
   
+  # Log into a twitch account
   def login(self):
     self.cancelling = False
     self.changeStatus(2)
     port = 59490
     setup_success = False
+    # Attempt to start a server (to retrieve token from browser after being redirected to Twitch)
     for port in range(59490,59500):
       try:
         self.loginServer = http.server.HTTPServer(('127.0.0.1',port),self.requestHandler)
@@ -178,7 +207,9 @@ class twitchIntegration():
         break
       except:
         pass
+    # Set state token
     self.stateToken = ''.join(random.choices(string.ascii_letters+string.digits,k=32))
+    # Construct URL for Twitch login 
     params = {
       "client_id": self.config.values['client-id'],
       "redirect_uri": "http://localhost:%i/auth_redirect"%(port),
@@ -188,6 +219,8 @@ class twitchIntegration():
       "state": self.stateToken
     }
     link = "https://id.twitch.tv/oauth2/authorize?" + urllib.parse.urlencode(params)
+    # Open the link on the default web browser
     webbrowser.open(link)
+    # Start server thread
     threading.Thread(target=self.loginServer.serve_forever,daemon=True).start()
     print("Listening for response on port",port)
