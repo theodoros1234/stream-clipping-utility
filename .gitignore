@@ -2,3 +2,4 @@
 .directory
 *swp
 app.config
+*.pyc
