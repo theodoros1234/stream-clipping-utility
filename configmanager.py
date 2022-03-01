@@ -1,5 +1,5 @@
 import os
-
+from PySide2.QtGui import QKeySequence
 
 default_client_id = "2ya1fhz3io1xhy9ao03ull3k8wwqff"
 
@@ -42,6 +42,7 @@ class configManager():
       self.values["token"] = ""
     if ("key-combo" in self.values) == False:
       self.values["key-combo"] = ""
+    self.values["key-combo"] = QKeySequence(self.values["key-combo"]).toString().lower()
     if "clip-length" in self.values:
       try:
         self.values["clip-length"] = int(self.values["clip-length"])
