@@ -4,7 +4,16 @@ import sys, threading
 from configmanager import configManager
 from twitchintegration import twitchIntegration
 from mainwindow import MainWindow
+from keyboardsource import keyboardSource
 from PySide2.QtWidgets import QApplication
+
+# Starts all sources
+def start():
+  keyboard.start()
+
+# Stops all sources
+def stop():
+  keyboard.stop()
 
 
 # Main function
@@ -14,15 +23,20 @@ if __name__ == "__main__":
   config = configManager()
   window = MainWindow()
   twitch = twitchIntegration()
-
+  keyboard = keyboardSource()
+  
   # Assign config object to each object that uses it
   window.config = config
   twitch.config = config
+  keyboard.config = config
   # Connect trigger functions between objects
   config.loadTrigger = window.onConfigLoad
   window.twitch = twitch
+  window.startOthers = start
+  window.stopOthers = stop
   twitch.raiseWindow = window.raiseTrigger
   twitch.updateWindow = window.updateLoginStatus
+  keyboard.trigger = twitch.createClip
   # Connect slots and signals
   window.initSlots()
 

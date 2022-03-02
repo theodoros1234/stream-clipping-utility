@@ -224,3 +224,7 @@ class twitchIntegration():
     # Start server thread
     threading.Thread(target=self.loginServer.serve_forever,daemon=True).start()
     print("Listening for response on port",port)
+  
+  # Create clip
+  def createClip(self):
+    print("A clip will be created.")

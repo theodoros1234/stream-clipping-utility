@@ -6,27 +6,22 @@ class MainWindow(QWidget):
   # When closing window, 
   def closeEvent(self,event):
     self.trayIcon.hide()
+    if self.started:
+      self.start_stop()
+  
   # Toggle window visibility
   def toggleWindow(self):
     self.setVisible(self.isHidden())
-  # Make key sequence valid
+  
+  # Update config value of key sequence when changed through the GUI
   def keySequenceUpdate(self):
     seq = self.keyComboSelect.keySequence().toString().lower()
-    prev_plus = False
-    i=0
-    for c in seq:
-      if c=='+':
-        prev_plus=True
-      else:
-        if (prev_plus==False) & (c==','):
-          seq = seq[0:i]
-          break
-        prev_plus=False
-      i+=1
     self.config.values['key-combo']=seq
     self.keyComboSelect.setKeySequence(QKeySequence(seq))
     self.config.saveConfig()
     self.checkStartConditions()
+  
+  # Updates config values when changed through the GUI
   def clipLengthUpdate(self,val):
     self.config.values['clip-length'] = val
     self.config.saveConfig()
@@ -39,9 +34,11 @@ class MainWindow(QWidget):
   def trayOnStartupUpdate(self,val):
     self.config.values['tray-on-startup'] = val
     self.config.saveConfig()
+  
   # Enables 'Start' button when appropriate conditions are met
   def checkStartConditions(self):
     self.startButton.setEnabled(self.config.values['key-combo']!="" and self.twitch.status==4)
+  
   # Updates login status label
   def updateLoginStatus(self):
     retryEnable = False
@@ -89,11 +86,45 @@ class MainWindow(QWidget):
     self.raise_()
     self.activateWindow()
   
+  def start_stop(self):
+    # Stops if already started
+    if self.started:
+      # Re-enables most GUI elements
+      self.updateLoginStatus()
+      self.keyComboSelect.setEnabled(True)
+      self.clipLength.setEnabled(True)
+      self.clipNotif.setEnabled(True)
+      self.errorNotif.setEnabled(True)
+      self.trayOnStartup.setEnabled(True)
+      # Changes button text
+      self.startButton.setText("Start")
+      # Stops sources
+      self.stopOthers()
+      self.started = False
+    # Starts if not already started
+    else:
+      # Disables most GUI elements
+      self.loginButton.setEnabled(False)
+      self.logoutButton.setEnabled(False)
+      self.retryButton.setEnabled(False)
+      self.cancelButton.setEnabled(False)
+      self.keyComboSelect.setEnabled(False)
+      self.clipLength.setEnabled(False)
+      self.clipNotif.setEnabled(False)
+      self.errorNotif.setEnabled(False)
+      self.trayOnStartup.setEnabled(False)
+      # Changes button text
+      self.startButton.setText("Stop")
+      # Starts sources
+      self.startOthers()
+      self.started = True
+  
   # Create window
   def __init__(self):
       super().__init__()
       self.config = None
       self.twitch = None
+      self.started = False
       
       # Main window layout
       self.appIcon = QIcon("icon.png")
@@ -168,6 +199,7 @@ class MainWindow(QWidget):
       
       # Config error message dialog
       self.configErrorDialog = QErrorMessage(self)
+      self.keyboardSourceErrorDialog = QErrorMessage(self)
   
   # Slots and signals
   def initSlots(self):
@@ -182,6 +214,7 @@ class MainWindow(QWidget):
     self.errorNotif.toggled.connect(self.errorNotifUpdate)
     self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
     
+    self.startButton.released.connect(self.start_stop)
     self.hideButton.released.connect(self.hide)
     self.trayIcon.activated.connect(self.toggleWindow)
 
