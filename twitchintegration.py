@@ -82,13 +82,16 @@ class twitchIntegration():
   # Init function
   def __init__(self):
     self.authComm = http.client.HTTPSConnection("id.twitch.tv",timeout=10)
+    self.apiComm = http.client.HTTPSConnection("api.twitch.tv")
     self.loginServer = None
     self.status = 1
     self.error = 0
     self.cancelling = False
     self.username = ""
+    self.user_id = ""
     self.config = None
     self.raiseWindow = None
+    self.notif = None
     # status 0: Not logged in
     # status 1: Validating token/login status
     # status 2: Waiting to receive login token from web browser
@@ -164,6 +167,7 @@ class twitchIntegration():
             data = json.loads(response.read())
             # Store username
             self.username = data['login']
+            self.user_id = data['user_id']
             # Verify that the appropriate scopes are allowed, otherwise consider user as not logged in
             if 'clips:edit' in data['scopes']:
               print("Valid token with sufficient permissions")
@@ -227,4 +231,5 @@ class twitchIntegration():
   
   # Create clip
   def createClip(self):
-    print("A clip will be created.")
+    # Change status message
+    self.notif(event=1)

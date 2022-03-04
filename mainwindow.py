@@ -1,5 +1,7 @@
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
 from PySide2.QtGui import QKeySequence, QIcon, Qt
+from queue import Queue
+import random, time, threading, io, multiprocessing
 
 # Main window class
 class MainWindow(QWidget):
@@ -81,6 +83,48 @@ class MainWindow(QWidget):
     self.logoutButton.setEnabled(logoutEnable)
     self.checkStartConditions()
   
+  # Clears status message after some amount of time
+  def __clear_status(self,st_id):
+    time.sleep(30)
+    # Makes sure that the message hasn't changed since the time that this instance of the function was called, since when the message changes, another instance of this function will be called
+    if st_id == self.__status_clear_id:
+      self.updateStatus()
+  
+  # Updates status label with appropriate message.
+  def updateStatus(self,event=0):
+    # event=0: No special event
+    # event=1: Clip is being created
+    # event=2: Clip has successfully been created
+    # event=3: Error while creating clip
+    set_timeout = False
+    timestamp = time.strftime('(at %H:%M<font color="gray">:%S</font>)')
+    if event==0:
+      if self.started:
+        self.status.setText("Listening for input.")
+      else:
+        self.status.setText("Idle.")
+    elif event==1:
+      self.status.setText("Creating clip... "+timestamp)
+      if self.config.values['clip-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Creating clip...")
+      set_timeout = True
+    elif event==2:
+      self.status.setText('<font color="green">Clip was created!</font> '+timestamp)
+      if self.config.values['clip-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Clip was created!")
+      set_timeout = True
+    elif event==3:
+      self.status.setText('<font color="red">Could not create clip.</font> '+timestamp)
+      if self.config.values['error-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Could not create clip.")
+      set_timeout = True
+    else:
+      raise Exception("Invalid event code.")
+    if set_timeout:
+      st_id = random.random()
+      self.__status_clear_id = st_id
+      threading.Thread(target=self.__clear_status,args=(st_id,),daemon=True).start()
+  
   # Raises window
   def raiseTrigger(self):
     self.raise_()
@@ -89,6 +133,7 @@ class MainWindow(QWidget):
   def start_stop(self):
     # Stops if already started
     if self.started:
+      print("Stopping")
       # Re-enables most GUI elements
       self.updateLoginStatus()
       self.keyComboSelect.setEnabled(True)
@@ -103,6 +148,7 @@ class MainWindow(QWidget):
       self.started = False
     # Starts if not already started
     else:
+      print("Starting")
       # Disables most GUI elements
       self.loginButton.setEnabled(False)
       self.logoutButton.setEnabled(False)
@@ -118,88 +164,100 @@ class MainWindow(QWidget):
       # Starts sources
       self.startOthers()
       self.started = True
+    
+    # Updates status label
+    self.updateStatus()
   
   # Create window
   def __init__(self):
-      super().__init__()
-      self.config = None
-      self.twitch = None
-      self.started = False
-      
-      # Main window layout
-      self.appIcon = QIcon("icon.png")
-      self.resize(380,420)
-      self.setWindowTitle("Stream Clipping Utility")
-      self.setWindowIcon(self.appIcon)
-      self.mainLayout = QVBoxLayout(self)
-      self.setLayout(self.mainLayout)
+    super().__init__()
+    self.config = None
+    self.twitch = None
+    self.started = False
+    self.__status_clear_id = 0
+    
+    # Main window layout
+    self.appIcon = QIcon("icon.png")
+    self.resize(380,460)
+    self.setWindowTitle("Stream Clipping Utility")
+    self.setWindowIcon(self.appIcon)
+    self.mainLayout = QVBoxLayout(self)
+    self.setLayout(self.mainLayout)
 
-      # Login label
-      self.mainLayout.addStretch()
-      self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Twitch Login",self))
-      # Login layout
-      self.loginStatus = QLabel("Please wait...",self)
-      self.loginStatus.setWordWrap(True)
-      self.loginLayout = QHBoxLayout(self)
-      self.mainLayout.addWidget(self.loginStatus)
-      self.mainLayout.addLayout(self.loginLayout)
-      # Login options
-      self.loginButton = QPushButton("Login",self)
-      self.logoutButton = QPushButton("Logout",self)
-      self.retryButton = QPushButton("Retry",self)
-      self.cancelButton = QPushButton("Cancel",self)
-      self.loginButton.setEnabled(False)
-      self.logoutButton.setEnabled(False)
-      self.retryButton.setEnabled(False)
-      self.cancelButton.setEnabled(False)
-      self.loginLayout.addWidget(self.loginButton)
-      self.loginLayout.addWidget(self.logoutButton)
-      self.loginLayout.addWidget(self.retryButton)
-      self.loginLayout.addWidget(self.cancelButton)
-      self.loginLayout.addStretch()
+    # Login label
+    self.mainLayout.addStretch()
+    self.mainLayout.addWidget(QLabel("<b>Step 1:</b> Twitch Login",self))
+    # Login layout
+    self.loginStatus = QLabel("Please wait...",self)
+    self.loginStatus.setWordWrap(True)
+    self.loginLayout = QHBoxLayout(self)
+    self.mainLayout.addWidget(self.loginStatus)
+    self.mainLayout.addLayout(self.loginLayout)
+    # Login options
+    self.loginButton = QPushButton("Login",self)
+    self.logoutButton = QPushButton("Logout",self)
+    self.retryButton = QPushButton("Retry",self)
+    self.cancelButton = QPushButton("Cancel",self)
+    self.loginButton.setEnabled(False)
+    self.logoutButton.setEnabled(False)
+    self.retryButton.setEnabled(False)
+    self.cancelButton.setEnabled(False)
+    self.loginLayout.addWidget(self.loginButton)
+    self.loginLayout.addWidget(self.logoutButton)
+    self.loginLayout.addWidget(self.retryButton)
+    self.loginLayout.addWidget(self.cancelButton)
+    self.loginLayout.addStretch()
 
-      # Options label
-      self.mainLayout.addStretch()
-      self.mainLayout.addWidget(QLabel("<b>Step 2:</b> Options",self))
-      # Options layout
-      self.optionsLayout = QFormLayout(self)
-      self.mainLayout.addLayout(self.optionsLayout)
-      # Options
-      self.keyComboSelect = QKeySequenceEdit(self)
-      self.clipLength = QSpinBox(self)
-      self.clipLength.setRange(5,60)
-      self.clipNotif = QCheckBox("Show notification on successful clip",self)
-      self.errorNotif = QCheckBox("Show notification on error",self)
-      self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
-      self.optionsLayout.addRow(self.tr("Key Combination Trigger:"),self.keyComboSelect)
-      self.optionsLayout.addRow(self.tr("Clip length (seconds):"),self.clipLength)
-      self.optionsLayout.addRow(self.clipNotif)
-      self.optionsLayout.addRow(self.errorNotif)
-      self.optionsLayout.addRow(self.trayOnStartup)
-
-      # Button Layout
-      self.buttonLayout = QHBoxLayout(self)
-      self.mainLayout.addStretch()
-      self.mainLayout.addLayout(self.buttonLayout)
-      # Buttons
-      self.startButton = QPushButton("Start",self)
-      self.hideButton = QPushButton("Minimize to Tray",self)
-      self.startButton.setEnabled(False)
-      self.buttonLayout.addStretch()
-      self.buttonLayout.addWidget(self.startButton)
-      self.buttonLayout.addWidget(self.hideButton)
-      
-      # System tray icon
-      self.trayIcon = QSystemTrayIcon(self)
-      self.trayIcon.setIcon(self.appIcon)
-      self.trayIcon.show()
-      
-      # System tray menu
-      self.trayMenu = QMenu(self)
-      
-      # Config error message dialog
-      self.configErrorDialog = QErrorMessage(self)
-      self.keyboardSourceErrorDialog = QErrorMessage(self)
+    # Options label
+    self.mainLayout.addStretch()
+    self.mainLayout.addWidget(QLabel("<b>Step 2:</b> Options",self))
+    # Options layout
+    self.optionsLayout = QFormLayout(self)
+    self.mainLayout.addLayout(self.optionsLayout)
+    # Options
+    self.keyComboSelect = QKeySequenceEdit(self)
+    self.clipLength = QSpinBox(self)
+    self.clipLength.setRange(5,60)
+    self.clipNotif = QCheckBox("Show notification on successful clip",self)
+    self.errorNotif = QCheckBox("Show notification on error",self)
+    self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
+    self.optionsLayout.addRow("Key Combination Trigger:",self.keyComboSelect)
+    self.optionsLayout.addRow("Clip length (seconds):",self.clipLength)
+    self.optionsLayout.addRow(self.clipNotif)
+    self.optionsLayout.addRow(self.errorNotif)
+    self.optionsLayout.addRow(self.trayOnStartup)
+    
+    # Status display
+    self.status = QLabel(self)
+    self.status.setTextFormat(Qt.RichText)
+    self.mainLayout.addStretch()
+    self.mainLayout.addWidget(QLabel("<b>Status</b>",self))
+    self.mainLayout.addWidget(self.status)
+    self.updateStatus()
+    
+    # Button Layout
+    self.buttonLayout = QHBoxLayout(self)
+    self.mainLayout.addStretch()
+    self.mainLayout.addLayout(self.buttonLayout)
+    # Buttons
+    self.startButton = QPushButton("Start",self)
+    self.hideButton = QPushButton("Minimize to Tray",self)
+    self.startButton.setEnabled(False)
+    self.buttonLayout.addStretch()
+    self.buttonLayout.addWidget(self.startButton)
+    self.buttonLayout.addWidget(self.hideButton)
+    
+    # System tray icon
+    self.trayIcon = QSystemTrayIcon(self)
+    self.trayIcon.setIcon(self.appIcon)
+    self.trayIcon.show()
+    
+    # System tray menu
+    self.trayMenu = QMenu(self)
+    
+    # Config error message dialog
+    self.configErrorDialog = QErrorMessage(self)
+    self.keyboardSourceErrorDialog = QErrorMessage(self)
   
   # Slots and signals
   def initSlots(self):

@@ -36,6 +36,7 @@ if __name__ == "__main__":
   window.stopOthers = stop
   twitch.raiseWindow = window.raiseTrigger
   twitch.updateWindow = window.updateLoginStatus
+  twitch.notif = window.updateStatus
   keyboard.trigger = twitch.createClip
   # Connect slots and signals
   window.initSlots()
