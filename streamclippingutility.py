@@ -42,7 +42,7 @@ if __name__ == "__main__":
   window.initSlots()
 
   # Load configuration
-  config.loadConfig()
+  config.load()
   
   # If application was started in tray, show notification
   if config.values["tray-on-startup"]:

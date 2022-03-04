@@ -68,7 +68,7 @@ class twitchIntegration():
           # Store token, save config and verify login
           self.parent.config.values['token'] = data[key][0].decode()
           threading.Thread(target=self.parent.receivedLoginResponse,daemon=True).start()
-          self.parent.config.saveConfig()
+          self.parent.config.save()
         except:
           # Request was missing required parameters
           self.end_headers()
@@ -134,7 +134,7 @@ class twitchIntegration():
   def logout(self):
     self.config.values['token'] = ""
     self.checkStatus()
-    self.config.saveConfig()
+    self.config.save()
   
   # Check login status
   def checkStatus(self):

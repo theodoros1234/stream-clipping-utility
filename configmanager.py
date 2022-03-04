@@ -12,7 +12,7 @@ class configManager():
     self.fileLocation = loc 
     self.loadTrigger = None
   # Function that loads a config file, and changes appropriate widgets on the main window to match the current configuration
-  def loadConfig(self):
+  def load(self):
     # Check if file exists before loading
     if os.path.exists(self.fileLocation):
       try:
@@ -34,22 +34,21 @@ class configManager():
     
     # Load default values for invalid or unset options
     if "client-id" in self.values:
-      if self.values["client-id"] == "":
+      if self.values["client-id"] == str():
         self.values["client-id"] = default_client_id
     else:
       self.values["client-id"] = default_client_id
+    
     if ("token" in self.values) == False:
-      self.values["token"] = ""
+      self.values["token"] = str()
+    
     if ("key-combo" in self.values) == False:
-      self.values["key-combo"] = ""
+      self.values["key-combo"] = str()
     self.values["key-combo"] = QKeySequence(self.values["key-combo"]).toString().lower()
-    if "clip-length" in self.values:
-      try:
-        self.values["clip-length"] = int(self.values["clip-length"])
-      except:
-        self.values["clip-length"] = 60
-    else:
-      self.values["clip-length"] = 60
+    
+    if ("clips-file-path" in self.values) == False:
+      self.values["clips-file-path"] = str()
+    
     if "clip-notif" in self.values:
       if self.values["clip-notif"].lower() == "false":
         self.values["clip-notif"] = False
@@ -57,6 +56,7 @@ class configManager():
         self.values["clip-notif"] = True
     else:
       self.values["clip-notif"] = True
+    
     if "error-notif" in self.values:
       if self.values["error-notif"].lower() == "false":
         self.values["error-notif"] = False
@@ -64,6 +64,7 @@ class configManager():
         self.values["error-notif"] = True
     else:
       self.values["error-notif"] = True
+    
     if "tray-on-startup" in self.values:
       if self.values["tray-on-startup"].lower() == "true":
         self.values["tray-on-startup"] = True
@@ -84,7 +85,7 @@ class configManager():
       self.loadTrigger()
 
   # Function that saves config file
-  def saveConfig(self):
+  def save(self):
     try:
       config_file = open(self.fileLocation,'w')
       for item in self.values.items():

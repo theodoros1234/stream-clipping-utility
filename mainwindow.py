@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage
+from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog
 from PySide2.QtGui import QKeySequence, QIcon, Qt
 from queue import Queue
 import random, time, threading, io, multiprocessing
@@ -20,22 +20,29 @@ class MainWindow(QWidget):
     seq = self.keyComboSelect.keySequence().toString().lower()
     self.config.values['key-combo']=seq
     self.keyComboSelect.setKeySequence(QKeySequence(seq))
-    self.config.saveConfig()
+    self.config.save()
     self.checkStartConditions()
   
   # Updates config values when changed through the GUI
   def clipLengthUpdate(self,val):
     self.config.values['clip-length'] = val
-    self.config.saveConfig()
+    self.config.save()
   def clipNotifUpdate(self,val):
     self.config.values['clip-notif'] = val
-    self.config.saveConfig()
+    self.config.save()
   def errorNotifUpdate(self,val):
     self.config.values['error-notif'] = val
-    self.config.saveConfig()
+    self.config.save()
   def trayOnStartupUpdate(self,val):
     self.config.values['tray-on-startup'] = val
-    self.config.saveConfig()
+    self.config.save()
+  
+  # Saves selected path to config and changes the appropriate GUI elements
+  def clipsFilePathOpen(self,f):
+    self.clipsFilePath.setText(f)
+    self.config.values['clips-file-path'] = f
+    self.config.save()
+    self.checkStartConditions()
   
   # Enables 'Start' button when appropriate conditions are met
   def checkStartConditions(self):
@@ -96,6 +103,7 @@ class MainWindow(QWidget):
     # event=1: Clip is being created
     # event=2: Clip has successfully been created
     # event=3: Error while creating clip
+    # event=4: Can't write to output folder
     set_timeout = False
     timestamp = time.strftime('(at %H:%M<font color="gray">:%S</font>)')
     if event==0:
@@ -118,6 +126,12 @@ class MainWindow(QWidget):
       if self.config.values['error-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Could not create clip.")
       set_timeout = True
+    elif event==4:
+      self.status.setText("The folder that was selected for saving clip links doesn't exist.")
+    elif event==5:
+      self.status.setText("Insufficient write permissions for the folder that was selected for saving clip links.")
+    elif event==6:
+      self.status.setText("The folder that was selected for saving clip links is full.")
     else:
       raise Exception("Invalid event code.")
     if set_timeout:
@@ -178,7 +192,7 @@ class MainWindow(QWidget):
     
     # Main window layout
     self.appIcon = QIcon("icon.png")
-    self.resize(380,460)
+    self.resize(420,460)
     self.setWindowTitle("Stream Clipping Utility")
     self.setWindowIcon(self.appIcon)
     self.mainLayout = QVBoxLayout(self)
@@ -216,13 +230,18 @@ class MainWindow(QWidget):
     self.mainLayout.addLayout(self.optionsLayout)
     # Options
     self.keyComboSelect = QKeySequenceEdit(self)
-    self.clipLength = QSpinBox(self)
-    self.clipLength.setRange(5,60)
+    self.clipsFilePathLayout = QHBoxLayout(self)
+    self.clipsFilePath = QLineEdit(self)
+    self.clipsFilePath.setReadOnly(True)
+    self.clipsFilePathBrowse = QPushButton("Browse",self)
+    self.clipsFilePathLayout.addWidget(self.clipsFilePath)
+    self.clipsFilePathLayout.addWidget(self.clipsFilePathBrowse)
     self.clipNotif = QCheckBox("Show notification on successful clip",self)
     self.errorNotif = QCheckBox("Show notification on error",self)
     self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
+    
     self.optionsLayout.addRow("Key Combination Trigger:",self.keyComboSelect)
-    self.optionsLayout.addRow("Clip length (seconds):",self.clipLength)
+    self.optionsLayout.addRow("Save clip links to (folder):",self.clipsFilePathLayout)
     self.optionsLayout.addRow(self.clipNotif)
     self.optionsLayout.addRow(self.errorNotif)
     self.optionsLayout.addRow(self.trayOnStartup)
@@ -247,6 +266,10 @@ class MainWindow(QWidget):
     self.buttonLayout.addWidget(self.startButton)
     self.buttonLayout.addWidget(self.hideButton)
     
+    # File dialog
+    self.clipsFilePathDialog = QFileDialog(self)
+    self.clipsFilePathDialog.setFileMode(QFileDialog.Directory)
+    
     # System tray icon
     self.trayIcon = QSystemTrayIcon(self)
     self.trayIcon.setIcon(self.appIcon)
@@ -261,25 +284,26 @@ class MainWindow(QWidget):
   
   # Slots and signals
   def initSlots(self):
-    self.loginButton.released.connect(self.twitch.login)
-    self.logoutButton.released.connect(self.twitch.logout)
-    self.retryButton.released.connect(self.twitch.retry)
-    self.cancelButton.released.connect(self.twitch.cancel)
+    self.loginButton.clicked.connect(self.twitch.login)
+    self.logoutButton.clicked.connect(self.twitch.logout)
+    self.retryButton.clicked.connect(self.twitch.retry)
+    self.cancelButton.clicked.connect(self.twitch.cancel)
     
     self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
-    self.clipLength.valueChanged.connect(self.clipLengthUpdate)
+    self.clipsFilePathBrowse.clicked.connect(self.clipsFilePathDialog.show)
+    self.clipsFilePathDialog.fileSelected.connect(self.clipsFilePathOpen)
     self.clipNotif.toggled.connect(self.clipNotifUpdate)
     self.errorNotif.toggled.connect(self.errorNotifUpdate)
     self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
     
-    self.startButton.released.connect(self.start_stop)
-    self.hideButton.released.connect(self.hide)
+    self.startButton.clicked.connect(self.start_stop)
+    self.hideButton.clicked.connect(self.hide)
     self.trayIcon.activated.connect(self.toggleWindow)
 
   # Updates GUI when configuration file is loaded
   def onConfigLoad(self):
     self.keyComboSelect.setKeySequence(QKeySequence(self.config.values["key-combo"]))
-    self.clipLength.setValue(self.config.values["clip-length"])
+    self.clipsFilePath.setText(self.config.values['clips-file-path'])
     self.clipNotif.setChecked(self.config.values["clip-notif"])
     self.errorNotif.setChecked(self.config.values["error-notif"])
     self.trayOnStartup.setChecked(self.config.values["tray-on-startup"])
