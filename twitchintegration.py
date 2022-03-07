@@ -157,6 +157,7 @@ class twitchIntegration():
       # Try connecting to twitch for verification
       try:
         print("Verifying twitch access token")
+        self.authComm = http.client.HTTPSConnection("id.twitch.tv",timeout=10)
         hd = {"Authorization": "Bearer " + self.config.values['token']}
         self.authComm.request('GET',"/oauth2/validate",headers=hd)
         response = self.authComm.getresponse()
@@ -205,6 +206,7 @@ class twitchIntegration():
     # Attempt to start a server (to retrieve token from browser after being redirected to Twitch)
     for port in range(59490,59500):
       try:
+        self.authComm = http.client.HTTPSConnection("id.twitch.tv",timeout=10)
         self.loginServer = http.server.HTTPServer(('127.0.0.1',port),self.requestHandler)
         self.loginServer.RequestHandlerClass.parent = self
         setup_success = True
@@ -231,6 +233,7 @@ class twitchIntegration():
   
   # Create clip or marker, according to config
   def create(self):
+    self.apiComm = http.client.HTTPSConnection("api.twitch.tv")
     # Change status message
     if self.config.values['clips-enabled']:
       self.createClip()
@@ -265,11 +268,9 @@ class twitchIntegration():
           self.notif(2)
         elif response.status == 404:
           print(response.status,response.reason)
-          error = data['error']
           error_msg = data['message']
           print(error_msg)
-          if error_msg == "Not Found":
-            self.notif(4)
+          self.notif(4)
         else:
           print(response.status,response.reason)
           try:
@@ -278,8 +279,8 @@ class twitchIntegration():
             pass
           error_r = True
           retries -= 1
-      except BaseException as err:
-        print("Error while taking clip:",err)
+      except BaseException as exp:
+        print("Error while taking clip:",exp)
         error_r = True
         retries -= 1
     if retries == 0:
@@ -310,7 +311,7 @@ class twitchIntegration():
           minutes = str((seconds//60)%60).zfill(2)
           seconds = str(seconds%60).zfill(2)
           timestamp = f"{hours}:{minutes}:{seconds} stream time"
-          print("Marker created at:",)
+          print("Marker created at",timestamp)
           self.notif(9,timestamp)
         elif response.status == 404:
           print(response.status,response.reason)

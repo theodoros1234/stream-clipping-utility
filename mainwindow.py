@@ -107,12 +107,11 @@ class MainWindow(QWidget):
     self.logoutButton.setEnabled(logoutEnable)
     self.checkStartConditions()
   
-  # Clears status message after some amount of time
+  # Removes status message from list after some amount of time
   def __clear_status(self,st_id):
     time.sleep(30)
-    # Makes sure that the message hasn't changed since the time that this instance of the function was called, since when the message changes, another instance of this function will be called
-    if st_id == self.__status_clear_id:
-      self.updateStatus()
+    self.__status_msg.pop(st_id)
+    self.updateStatus()
   
   # Updates status label with appropriate message.
   def updateStatus(self,event=0,data=""):
@@ -122,64 +121,70 @@ class MainWindow(QWidget):
     # event=3: Error while creating clip
     # event=4: Can't write to output folder
     set_timeout = False
-    timestamp = time.strftime('(at %H:%M<font color="gray">:%S</font> system time)')
+    message = None
     if event==0:
       if self.started:
-        self.status.setText("Listening for input.")
+        self.__status_msg['main'] = "Listening for input."
       else:
-        self.status.setText("Idle.")
+        self.__status_msg['main'] = "Idle."
     elif event==1:
-      self.status.setText("Creating clip... "+timestamp)
+      message = "Creating clip... "
       if self.config.values['clip-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Creating clip...")
-      set_timeout = True
     elif event==2:
-      self.status.setText('<font color="green">Clip was created!</font> '+timestamp)
+      message = '<font color="green">Clip was created!</font>'
       if self.config.values['clip-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Clip was created!")
-      set_timeout = True
     elif event==3:
-      self.status.setText('<font color="red">Could not create clip.</font> '+timestamp)
+      message = '<font color="red">Could not create clip.</font>'
       if self.config.values['error-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Could not create clip.")
-      set_timeout = True
     elif event==4:
-      self.status.setText('Channel is offline.')
+      message = '<font color="red">Channel is offline.</font>'
       if self.config.values['error-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Channel is offline.")
-      set_timeout = True
     elif event==5:
-      self.status.setText("The folder that was selected for saving clip links doesn't exist.")
+      message = "The folder that was selected for saving clip links doesn't exist."
     elif event==6:
-      self.status.setText("Insufficient write permissions for the folder that was selected for saving clip links.")
+      message = "Insufficient write permissions for the folder that was selected for saving clip links."
     elif event==7:
-      self.status.setText("The folder that was selected for saving clip links is full.")
+      message = "The folder that was selected for saving clip links is full."
     elif event==8:
-      self.status.setText("Creating marker... "+timestamp)
+      message = "Creating marker..."
       if self.config.values['clip-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Creating marker...")
-      set_timeout = True
     elif event==9:
-      self.status.setText(f'<font color="green">Marker was created at <font color="gray">{data}</font>.</font> '+timestamp)
+      message = f'<font color="green">Marker was created at <font color="gray">{data}</font>.</font>'
       if self.config.values['clip-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility",f"Marker was created at {data}")
-      set_timeout = True
     elif event==10:
-      self.status.setText('<font color="red">Could not create marker.</font> '+timestamp)
+      message = '<font color="red">Could not create marker.</font>'
       if self.config.values['error-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Could not create marker.")
-      set_timeout = True
     elif event==11:
-      self.status.setText('<font color="red">Can\'t create marker due to VODs being unavailable.</font> If these are the first seconds of the stream, please try again in a moment. Otherwise, head to Twitch\'s Creator Dashboard and enable storing and automatically publishing past broadcasts.'+timestamp)
+      message = '<font color="red">Can\'t create marker due to VODs being unavailable.</font> If these are the first seconds of the stream, please try again in a moment. Otherwise, head to Twitch\'s Creator Dashboard and enable storing and automatically publishing past broadcasts.'
       if self.config.values['error-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Can't create a marker due to VODs being unavailable. Open the app for more info.")
-      set_timeout = True
     else:
       raise Exception("Invalid event code.")
-    if set_timeout:
+    
+    # Add message to list
+    if message!=None:
       st_id = random.random()
-      self.__status_clear_id = st_id
+      self.__status_msg[st_id] = message
       threading.Thread(target=self.__clear_status,args=(st_id,),daemon=True).start()
+    
+    # If no messages in list, display main status message
+    if len(self.__status_msg) == 1:
+      self.status.setText(self.__status_msg['main'])
+    # Otherwise, show all messages
+    else:
+      final_str = str()
+      for msg in self.__status_msg.items():
+        # Skip the main message
+        if msg[0] != "main":
+          final_str += msg[1]+'<br>'
+      self.status.setText(final_str[:-4])
   
   # Raises window
   def raiseTrigger(self):
@@ -235,11 +240,11 @@ class MainWindow(QWidget):
     self.config = None
     self.twitch = None
     self.started = False
-    self.__status_clear_id = 0
+    self.__status_msg = {'main':'Please wait...'}
     
     # Main window layout
     self.appIcon = QIcon("icon.png")
-    self.resize(420,480)
+    self.resize(420,520)
     self.setWindowTitle("Stream Clipping Utility")
     self.setWindowIcon(self.appIcon)
     self.mainLayout = QVBoxLayout(self)
