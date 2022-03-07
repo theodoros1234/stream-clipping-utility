@@ -5,15 +5,19 @@ from configmanager import configManager
 from twitchintegration import twitchIntegration
 from mainwindow import MainWindow
 from keyboardsource import keyboardSource
+from urloutput import urlOutput
 from PySide2.QtWidgets import QApplication
 
 # Starts all sources
 def start():
   keyboard.start()
+  if config.values['clips-enabled']:
+    url_out.start()
 
 # Stops all sources
 def stop():
   keyboard.stop()
+  url_out.start()
 
 
 # Main function
@@ -24,11 +28,13 @@ if __name__ == "__main__":
   window = MainWindow()
   twitch = twitchIntegration()
   keyboard = keyboardSource()
+  url_out = urlOutput()
   
   # Assign config object to each object that uses it
   window.config = config
   twitch.config = config
   keyboard.config = config
+  url_out.config = config
   # Connect trigger functions between objects
   config.loadTrigger = window.onConfigLoad
   window.twitch = twitch
@@ -37,7 +43,8 @@ if __name__ == "__main__":
   twitch.raiseWindow = window.raiseTrigger
   twitch.updateWindow = window.updateLoginStatus
   twitch.notif = window.updateStatus
-  keyboard.trigger = twitch.createClip
+  twitch.exportUrl = url_out.push
+  keyboard.trigger = twitch.create
   # Connect slots and signals
   window.initSlots()
 

@@ -24,6 +24,16 @@ class MainWindow(QWidget):
     self.checkStartConditions()
   
   # Updates config values when changed through the GUI
+  def clipsEnabledUpdate(self,val):
+    self.config.values['clips-enabled'] = val
+    self.clipsFilePath.setEnabled(val)
+    self.clipsFilePathBrowse.setEnabled(val)
+    self.config.save()
+    self.checkStartConditions()
+  def markersEnabledUpdate(self,val):
+    self.config.values['markers-enabled'] = val
+    self.config.save()
+    self.checkStartConditions()
   def clipLengthUpdate(self,val):
     self.config.values['clip-length'] = val
     self.config.save()
@@ -46,7 +56,14 @@ class MainWindow(QWidget):
   
   # Enables 'Start' button when appropriate conditions are met
   def checkStartConditions(self):
-    self.startButton.setEnabled(self.config.values['key-combo']!="" and self.twitch.status==4)
+    cnd_met = True
+    
+    if self.config.values['key-combo']=="" or self.twitch.status!=4:
+      cnd_met = False
+    if self.config.values['clips-enabled']==False and self.config.values['markers-enabled']==False:
+      cnd_met = False
+    
+    self.startButton.setEnabled(cnd_met)
   
   # Updates login status label
   def updateLoginStatus(self):
@@ -98,14 +115,14 @@ class MainWindow(QWidget):
       self.updateStatus()
   
   # Updates status label with appropriate message.
-  def updateStatus(self,event=0):
+  def updateStatus(self,event=0,data=""):
     # event=0: No special event
     # event=1: Clip is being created
     # event=2: Clip has successfully been created
     # event=3: Error while creating clip
     # event=4: Can't write to output folder
     set_timeout = False
-    timestamp = time.strftime('(at %H:%M<font color="gray">:%S</font>)')
+    timestamp = time.strftime('(at %H:%M<font color="gray">:%S</font> system time)')
     if event==0:
       if self.started:
         self.status.setText("Listening for input.")
@@ -127,11 +144,36 @@ class MainWindow(QWidget):
         self.trayIcon.showMessage("Stream Clipping Utility","Could not create clip.")
       set_timeout = True
     elif event==4:
-      self.status.setText("The folder that was selected for saving clip links doesn't exist.")
+      self.status.setText('Channel is offline.')
+      if self.config.values['error-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Channel is offline.")
+      set_timeout = True
     elif event==5:
-      self.status.setText("Insufficient write permissions for the folder that was selected for saving clip links.")
+      self.status.setText("The folder that was selected for saving clip links doesn't exist.")
     elif event==6:
+      self.status.setText("Insufficient write permissions for the folder that was selected for saving clip links.")
+    elif event==7:
       self.status.setText("The folder that was selected for saving clip links is full.")
+    elif event==8:
+      self.status.setText("Creating marker... "+timestamp)
+      if self.config.values['clip-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Creating marker...")
+      set_timeout = True
+    elif event==9:
+      self.status.setText(f'<font color="green">Marker was created at <font color="gray">{data}</font>.</font> '+timestamp)
+      if self.config.values['clip-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility",f"Marker was created at {data}")
+      set_timeout = True
+    elif event==10:
+      self.status.setText('<font color="red">Could not create marker.</font> '+timestamp)
+      if self.config.values['error-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Could not create marker.")
+      set_timeout = True
+    elif event==11:
+      self.status.setText('<font color="red">Can\'t create marker due to VODs being unavailable.</font> If these are the first seconds of the stream, please try again in a moment. Otherwise, head to Twitch\'s Creator Dashboard and enable storing and automatically publishing past broadcasts.'+timestamp)
+      if self.config.values['error-notif']:
+        self.trayIcon.showMessage("Stream Clipping Utility","Can't create a marker due to VODs being unavailable. Open the app for more info.")
+      set_timeout = True
     else:
       raise Exception("Invalid event code.")
     if set_timeout:
@@ -144,40 +186,45 @@ class MainWindow(QWidget):
     self.raise_()
     self.activateWindow()
   
+  # Enables/disabled most GUI elements
+  def guiSetEnable(self,val):
+    if val:
+      self.updateLoginStatus()
+    else:
+      self.loginButton.setEnabled(val)
+      self.logoutButton.setEnabled(val)
+      self.retryButton.setEnabled(val)
+      self.cancelButton.setEnabled(val)
+    self.keyComboSelect.setEnabled(val)
+    self.clipsEnabled.setEnabled(val)
+    self.clipsFilePath.setEnabled(val and self.config.values['clips-enabled'])
+    self.clipsFilePathBrowse.setEnabled(val and self.config.values['clips-enabled'])
+    self.markersEnabled.setEnabled(val)
+    self.clipNotif.setEnabled(val)
+    self.errorNotif.setEnabled(val)
+    self.trayOnStartup.setEnabled(val)
+  
   def start_stop(self):
     # Stops if already started
     if self.started:
       print("Stopping")
+      self.started = False
       # Re-enables most GUI elements
-      self.updateLoginStatus()
-      self.keyComboSelect.setEnabled(True)
-      self.clipLength.setEnabled(True)
-      self.clipNotif.setEnabled(True)
-      self.errorNotif.setEnabled(True)
-      self.trayOnStartup.setEnabled(True)
+      self.guiSetEnable(True)
       # Changes button text
       self.startButton.setText("Start")
       # Stops sources
       self.stopOthers()
-      self.started = False
     # Starts if not already started
     else:
       print("Starting")
+      self.started = True
       # Disables most GUI elements
-      self.loginButton.setEnabled(False)
-      self.logoutButton.setEnabled(False)
-      self.retryButton.setEnabled(False)
-      self.cancelButton.setEnabled(False)
-      self.keyComboSelect.setEnabled(False)
-      self.clipLength.setEnabled(False)
-      self.clipNotif.setEnabled(False)
-      self.errorNotif.setEnabled(False)
-      self.trayOnStartup.setEnabled(False)
+      self.guiSetEnable(False)
       # Changes button text
       self.startButton.setText("Stop")
       # Starts sources
       self.startOthers()
-      self.started = True
     
     # Updates status label
     self.updateStatus()
@@ -192,7 +239,7 @@ class MainWindow(QWidget):
     
     # Main window layout
     self.appIcon = QIcon("icon.png")
-    self.resize(420,460)
+    self.resize(420,480)
     self.setWindowTitle("Stream Clipping Utility")
     self.setWindowIcon(self.appIcon)
     self.mainLayout = QVBoxLayout(self)
@@ -230,18 +277,22 @@ class MainWindow(QWidget):
     self.mainLayout.addLayout(self.optionsLayout)
     # Options
     self.keyComboSelect = QKeySequenceEdit(self)
+    self.clipsEnabled = QCheckBox("Create clips")
     self.clipsFilePathLayout = QHBoxLayout(self)
     self.clipsFilePath = QLineEdit(self)
     self.clipsFilePath.setReadOnly(True)
     self.clipsFilePathBrowse = QPushButton("Browse",self)
     self.clipsFilePathLayout.addWidget(self.clipsFilePath)
     self.clipsFilePathLayout.addWidget(self.clipsFilePathBrowse)
+    self.markersEnabled = QCheckBox("Create markers")
     self.clipNotif = QCheckBox("Show notification on successful clip",self)
     self.errorNotif = QCheckBox("Show notification on error",self)
     self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
     
     self.optionsLayout.addRow("Key Combination Trigger:",self.keyComboSelect)
+    self.optionsLayout.addRow(self.clipsEnabled)
     self.optionsLayout.addRow("Save clip links to (folder):",self.clipsFilePathLayout)
+    self.optionsLayout.addRow(self.markersEnabled)
     self.optionsLayout.addRow(self.clipNotif)
     self.optionsLayout.addRow(self.errorNotif)
     self.optionsLayout.addRow(self.trayOnStartup)
@@ -249,6 +300,7 @@ class MainWindow(QWidget):
     # Status display
     self.status = QLabel(self)
     self.status.setTextFormat(Qt.RichText)
+    self.status.setWordWrap(True)
     self.mainLayout.addStretch()
     self.mainLayout.addWidget(QLabel("<b>Status</b>",self))
     self.mainLayout.addWidget(self.status)
@@ -290,8 +342,10 @@ class MainWindow(QWidget):
     self.cancelButton.clicked.connect(self.twitch.cancel)
     
     self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
+    self.clipsEnabled.toggled.connect(self.clipsEnabledUpdate)
     self.clipsFilePathBrowse.clicked.connect(self.clipsFilePathDialog.show)
     self.clipsFilePathDialog.fileSelected.connect(self.clipsFilePathOpen)
+    self.markersEnabled.toggled.connect(self.markersEnabledUpdate)
     self.clipNotif.toggled.connect(self.clipNotifUpdate)
     self.errorNotif.toggled.connect(self.errorNotifUpdate)
     self.trayOnStartup.toggled.connect(self.trayOnStartupUpdate)
@@ -302,8 +356,13 @@ class MainWindow(QWidget):
 
   # Updates GUI when configuration file is loaded
   def onConfigLoad(self):
-    self.keyComboSelect.setKeySequence(QKeySequence(self.config.values["key-combo"]))
-    self.clipsFilePath.setText(self.config.values['clips-file-path'])
-    self.clipNotif.setChecked(self.config.values["clip-notif"])
-    self.errorNotif.setChecked(self.config.values["error-notif"])
-    self.trayOnStartup.setChecked(self.config.values["tray-on-startup"])
+    v = self.config.values
+    self.keyComboSelect.setKeySequence(QKeySequence(v["key-combo"]))
+    self.clipsEnabled.setChecked(v['clips-enabled'])
+    self.clipsFilePath.setEnabled(v['clips-enabled'])
+    self.clipsFilePath.setText(v['clips-file-path'])
+    self.clipsFilePathBrowse.setEnabled(v['clips-enabled'])
+    self.markersEnabled.setChecked(v['markers-enabled'])
+    self.clipNotif.setChecked(v["clip-notif"])
+    self.errorNotif.setChecked(v["error-notif"])
+    self.trayOnStartup.setChecked(v["tray-on-startup"])

@@ -169,7 +169,7 @@ class twitchIntegration():
             self.username = data['login']
             self.user_id = data['user_id']
             # Verify that the appropriate scopes are allowed, otherwise consider user as not logged in
-            if 'clips:edit' in data['scopes']:
+            if 'clips:edit' in data['scopes'] and 'channel:manage:broadcast' in data['scopes']:
               print("Valid token with sufficient permissions")
               self.changeStatus(4)
             else:
@@ -218,7 +218,7 @@ class twitchIntegration():
       "client_id": self.config.values['client-id'],
       "redirect_uri": "http://localhost:%i/auth_redirect"%(port),
       "response_type": "token",
-      "scope": "clips:edit",
+      "scope": "clips:edit channel:manage:broadcast",
       "force_verify": "true",
       "state": self.stateToken
     }
@@ -229,7 +229,106 @@ class twitchIntegration():
     threading.Thread(target=self.loginServer.serve_forever,daemon=True).start()
     print("Listening for response on port",port)
   
+  # Create clip or marker, according to config
+  def create(self):
+    # Change status message
+    if self.config.values['clips-enabled']:
+      self.createClip()
+    if self.config.values['markers-enabled']:
+      self.createMarker()
+  
   # Create clip
   def createClip(self):
-    # Change status message
-    self.notif(event=1)
+    # Try to create a clip, retry up to 4 times
+    self.notif(1)
+    retries = 4
+    error_r = True
+    print("Creating clip")
+    while retries and error_r:
+      error_r = False
+      try:
+        hd = {
+          "Authorization": "Bearer " + self.config.values['token'],
+          "Client-Id": self.config.values['client-id'],
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+        params = {
+          'broadcaster_id': self.user_id,
+          'has_delay': 'true'
+        }
+        self.apiComm.request('POST',"/helix/clips",urllib.parse.urlencode(params).encode(),hd)
+        response = self.apiComm.getresponse()
+        data = json.loads(response.read())
+        if response.status == 202:
+          print("Clip created:",url)
+          self.exportUrl(url)
+          self.notif(2)
+        elif response.status == 404:
+          print(response.status,response.reason)
+          error = data['error']
+          error_msg = data['message']
+          print(error_msg)
+          if error_msg == "Not Found":
+            self.notif(4)
+        else:
+          print(response.status,response.reason)
+          try:
+            print(data['error'])
+          except:
+            pass
+          error_r = True
+          retries -= 1
+      except BaseException as err:
+        print("Error while taking clip:",err)
+        error_r = True
+        retries -= 1
+    if retries == 0:
+      self.notif(3)
+
+  # Create clip
+  def createMarker(self):
+    # Try to create a marker, retry up to 4 times
+    self.notif(8)
+    retries = 4
+    error_r = True
+    print("Creating marker")
+    while retries and error_r:
+      error_r = False
+      try:
+        hd = {
+          "Authorization": "Bearer " + self.config.values['token'],
+          "Client-Id": self.config.values['client-id'],
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+        params = {'user_id': self.user_id}
+        self.apiComm.request('POST',"/helix/streams/markers",urllib.parse.urlencode(params).encode(),hd)
+        response = self.apiComm.getresponse()
+        data = json.loads(response.read())
+        if response.status == 200:
+          seconds = int(data['data'][0]['position_seconds'])
+          hours = str(seconds//3600)
+          minutes = str((seconds//60)%60).zfill(2)
+          seconds = str(seconds%60).zfill(2)
+          timestamp = f"{hours}:{minutes}:{seconds} stream time"
+          print("Marker created at:",)
+          self.notif(9,timestamp)
+        elif response.status == 404:
+          print(response.status,response.reason)
+          error = data['error']
+          error_msg = data['message']
+          print(error_msg)
+          self.notif(10)
+        else:
+          print(response.status,response.reason)
+          try:
+            print(data['error'])
+          except:
+            pass
+          error_r = True
+          retries -= 1
+      except BaseException as err:
+        print("Error while creating marker:",err)
+        error_r = True
+        retries -= 1
+    if retries == 0:
+      self.notif(10)

@@ -73,6 +73,22 @@ class configManager():
     else:
       self.values["tray-on-startup"] = False
     
+    if "clips-enabled" in self.values:
+      if self.values['clips-enabled'].lower() == "true":
+        self.values['clips-enabled'] = True
+      else:
+        self.values['clips-enabled'] = False
+    else:
+      self.values['clips-enabled'] = False
+    
+    if "markers-enabled" in self.values:
+      if self.values['markers-enabled'].lower() == "true":
+        self.values['markers-enabled'] = True
+      else:
+        self.values['markers-enabled'] = False
+    else:
+      self.values['markers-enabled'] = True
+    
     # Print config
     print("Loaded values:")
     for item in self.values.items():
