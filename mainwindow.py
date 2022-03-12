@@ -290,7 +290,7 @@ class MainWindow(QWidget):
     self.clipsFilePathLayout.addWidget(self.clipsFilePath)
     self.clipsFilePathLayout.addWidget(self.clipsFilePathBrowse)
     self.markersEnabled = QCheckBox("Create markers")
-    self.clipNotif = QCheckBox("Show notification on successful clip",self)
+    self.clipNotif = QCheckBox("Show notification on successful clip/marker",self)
     self.errorNotif = QCheckBox("Show notification on error",self)
     self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
     
