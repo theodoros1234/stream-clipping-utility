@@ -1,5 +1,5 @@
-from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QListWidget
-from PySide2.QtGui import QKeySequence, QIcon, Qt
+from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QListWidget, QListWidgetItem
+from PySide2.QtGui import QKeySequence, QIcon, QBrush, Qt
 from queue import Queue
 import random, time, threading, io, multiprocessing
 
@@ -110,10 +110,15 @@ class MainWindow(QWidget):
   def setStatus(self,label):
     self.status.setText(f"<b>Status:</b> {label}")
   
-  def addStatusItem(self,label):
-    pos = self.statusList.count()
-    self.statusList.addItem(time.asctime()+' '+label)
-    self.statusList.scrollToItem(self.statusList.item(pos))
+  def addStatusItem(self,label,color=None):
+    item = QListWidgetItem(time.asctime()+' '+label, listview=self.statusList)
+    if color != None:
+      item.setForeground(QBrush(color))
+    self.statusList.addItem(item)
+    item.setSelected(True)
+    time.sleep(0.016)
+    max_pos = self.statusList.verticalScrollBar().maximum()
+    self.statusList.verticalScrollBar().setValue(max_pos)
   
   # Updates status label with appropriate message.
   def updateStatus(self,event=0,data=""):
@@ -122,55 +127,62 @@ class MainWindow(QWidget):
     # event=2: Clip has successfully been created
     # event=3: Error while creating clip
     # event=4: Can't write to output folder
-    set_timeout = False
     message = None
+    color = None
     if event==0:
       if self.started:
-        self.setStatus("Listening for input.")
+        message = "Listening for input."
       else:
-        self.setStatus("Idle.")
+        message = "Idle."
+      self.setStatus(message)
     elif event==1:
       message = "Creating clip... "
       if self.config.values['clip-notif']:
         self.trayIcon.showMessage("Stream Clipping Utility","Creating clip...")
     elif event==2:
-      message = '<font color="green">Clip was created!</font>'
+      message = 'Clip was created!'
+      color = Qt.green
       if self.config.values['clip-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility","Clip was created!")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     elif event==3:
-      message = '<font color="red">Could not create clip.</font>'
+      message = 'Could not create clip.'
+      color = Qt.red
       if self.config.values['error-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility","Could not create clip.")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     elif event==4:
-      message = '<font color="red">Channel is offline.</font>'
+      message = 'Channel is offline.'
+      color = Qt.red
       if self.config.values['error-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility","Channel is offline.")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     elif event==5:
-      message = "The folder that was selected for saving clip links doesn't exist."
+      self.setStatus("The folder that was selected for saving clip links doesn't exist.")
     elif event==6:
-      message = "Insufficient write permissions for the folder that was selected for saving clip links."
+      self.setStatus("Insufficient write permissions for the folder that was selected for saving clip links.")
     elif event==7:
-      message = "The folder that was selected for saving clip links is full."
+      self.setStatus("The folder that was selected for saving clip links is full.")
     elif event==8:
       message = "Creating marker..."
       if self.config.values['clip-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility","Creating marker...")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     elif event==9:
-      message = f'<font color="green">Marker was created at <font color="gray">{data}</font>.</font>'
+      message = f'Marker was created at {data}.'
+      color = Qt.green
       if self.config.values['clip-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility",f"Marker was created at {data}")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     elif event==10:
-      message = '<font color="red">Could not create marker.</font>'
+      message = 'Could not create marker.'
+      color = Qt.red
       if self.config.values['error-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility","Could not create marker.")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     elif event==11:
-      message = '<font color="red">Can\'t create marker due to VODs being unavailable.</font> If these are the first seconds of the stream, please try again in a moment. Otherwise, head to Twitch\'s Creator Dashboard and enable storing and automatically publishing past broadcasts.'
+      message = 'Can\'t create marker due to VODs being disabled or private.'
       if self.config.values['error-notif']:
-        self.trayIcon.showMessage("Stream Clipping Utility","Can't create a marker due to VODs being unavailable. Open the app for more info.")
+        self.trayIcon.showMessage("Stream Clipping Utility",message)
     else:
       raise Exception("Invalid event code.")
     
-    self.addStatusItem(message)
+    if message != None:
+      self.addStatusItem(message,color)
   
   # Raises window
   def raiseTrigger(self):
