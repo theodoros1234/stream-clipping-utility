@@ -17,7 +17,7 @@ def start():
 # Stops all sources
 def stop():
   keyboard.stop()
-  url_out.start()
+  url_out.stop()
 
 
 # Main function
@@ -45,11 +45,15 @@ if __name__ == "__main__":
   twitch.notif = window.updateStatus
   twitch.exportUrl = url_out.push
   keyboard.trigger = twitch.create
+  url_out.stopExternal = stop
   # Connect slots and signals
   window.initSlots()
 
   # Load configuration
   config.load()
+  
+  # Check for previous output file that might have been left from incorrectly closing the application
+  #url_out.finalizeOutput()
   
   # If application was started in tray, show notification
   if config.values["tray-on-startup"]:

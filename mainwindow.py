@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog
+from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QListWidget
 from PySide2.QtGui import QKeySequence, QIcon, Qt
 from queue import Queue
 import random, time, threading, io, multiprocessing
@@ -107,11 +107,13 @@ class MainWindow(QWidget):
     self.logoutButton.setEnabled(logoutEnable)
     self.checkStartConditions()
   
-  # Removes status message from list after some amount of time
-  def __clear_status(self,st_id):
-    time.sleep(30)
-    self.__status_msg.pop(st_id)
-    self.updateStatus()
+  def setStatus(self,label):
+    self.status.setText(f"<b>Status:</b> {label}")
+  
+  def addStatusItem(self,label):
+    pos = self.statusList.count()
+    self.statusList.addItem(time.asctime()+' '+label)
+    self.statusList.scrollToItem(self.statusList.item(pos))
   
   # Updates status label with appropriate message.
   def updateStatus(self,event=0,data=""):
@@ -124,9 +126,9 @@ class MainWindow(QWidget):
     message = None
     if event==0:
       if self.started:
-        self.__status_msg['main'] = "Listening for input."
+        self.setStatus("Listening for input.")
       else:
-        self.__status_msg['main'] = "Idle."
+        self.setStatus("Idle.")
     elif event==1:
       message = "Creating clip... "
       if self.config.values['clip-notif']:
@@ -168,23 +170,7 @@ class MainWindow(QWidget):
     else:
       raise Exception("Invalid event code.")
     
-    # Add message to list
-    if message!=None:
-      st_id = random.random()
-      self.__status_msg[st_id] = message
-      threading.Thread(target=self.__clear_status,args=(st_id,),daemon=True).start()
-    
-    # If no messages in list, display main status message
-    if len(self.__status_msg) == 1:
-      self.status.setText(self.__status_msg['main'])
-    # Otherwise, show all messages
-    else:
-      final_str = str()
-      for msg in self.__status_msg.items():
-        # Skip the main message
-        if msg[0] != "main":
-          final_str += msg[1]+'<br>'
-      self.status.setText(final_str[:-4])
+    self.addStatusItem(message)
   
   # Raises window
   def raiseTrigger(self):
@@ -303,12 +289,12 @@ class MainWindow(QWidget):
     self.optionsLayout.addRow(self.trayOnStartup)
     
     # Status display
-    self.status = QLabel(self)
+    self.status = QLabel("<b>Status</b>",self)
+    self.statusList = QListWidget(self)
     self.status.setTextFormat(Qt.RichText)
-    self.status.setWordWrap(True)
     self.mainLayout.addStretch()
-    self.mainLayout.addWidget(QLabel("<b>Status</b>",self))
     self.mainLayout.addWidget(self.status)
+    self.mainLayout.addWidget(self.statusList)
     self.updateStatus()
     
     # Button Layout

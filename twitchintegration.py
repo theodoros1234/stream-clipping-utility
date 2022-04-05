@@ -263,6 +263,7 @@ class twitchIntegration():
         response = self.apiComm.getresponse()
         data = json.loads(response.read())
         if response.status == 202:
+          url = data['data'][0]['edit_url']
           print("Clip created:",url)
           self.exportUrl(url)
           self.notif(2)
