@@ -45,7 +45,8 @@ if __name__ == "__main__":
   twitch.notif = window.updateStatus
   twitch.exportUrl = url_out.push
   keyboard.trigger = twitch.create
-  url_out.stopExternal = stop
+  url_out.stopExternal = window.stopExternal
+  keyboard.stopExternal = window.stopExternal
   # Connect slots and signals
   window.initSlots()
 

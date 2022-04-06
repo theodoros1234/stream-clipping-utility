@@ -16,8 +16,10 @@ class keyboardSource():
         self.__linux_root = True
         pass
     self.__stopping = False
+    self.__proc_dead = False
     self.started_from_cmd = False
     self.config = None
+    self.stopExternal = None
   
   # Converts string returned from QKeySequence to a string that the keyboard library can use, and sets the hotkey
   def setHotkey(self,key_seq):
@@ -51,10 +53,16 @@ class keyboardSource():
         self.trigger()
     if self.__stopping==False:
       sys.stderr.write("Child process ended unexpectedly.\n")
-      self.stop(proc_dead=True)
+      self.__proc_dead = True
+      if self.stopExternal == None:
+        self.stop()
+      else:
+        self.stopExternal("Child process for keyboard monitoring ended unexpectedly.")
   
   # Start listening for hotkey
   def start(self):
+    self.__proc_dead = False
+    self.__stopping = False
     # Get hotkey from config
     if self.config != None:
       self.setHotkey(self.config.values['key-combo'])
@@ -68,11 +76,11 @@ class keyboardSource():
       self.__h_handle = keyboard.add_hotkey(self.__hotkey, self.trigger, suppress=True)
   
   # Stop listening for hotkey
-  def stop(self,proc_dead=False):
+  def stop(self):
     self.__stopping = True
     if self.__linux_root:
-      # Send stop signal to child process
-      if proc_dead==False:
+      # Send stop signal to child processs
+      if self.__proc_dead==False:
         self.__child_proc.communicate("stop".encode("utf-8"),10)
     else:
       # Stop listening for the hotkey

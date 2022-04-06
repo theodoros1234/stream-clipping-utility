@@ -38,12 +38,11 @@ class urlOutput():
       self.f.flush()
     except BaseException as e:
       self.exp(e)
-      self.stopExternal()
   
   # Handles exceptions
   def exp(self, e):
     print(type(e).__name__,e)
-    self.stopExternal()
+    self.stopExternal("Clip URL Output: "+str(e))
   
   # Closes file
   def stop(self):

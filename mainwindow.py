@@ -232,6 +232,15 @@ class MainWindow(QWidget):
     # Updates status label
     self.updateStatus()
   
+  # Handles stopping when an error occurs.
+  def stopExternal(self,msg="Unknown error, stopping.",isError=True):
+    if isError:
+      self.addStatusItem(msg,Qt.red)
+    else:
+      self.addStatusItem(msg)
+    if self.started:
+      self.start_stop()
+  
   # Create window
   def __init__(self):
     super().__init__()
