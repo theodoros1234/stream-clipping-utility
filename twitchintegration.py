@@ -243,7 +243,7 @@ class twitchIntegration():
   # Create clip
   def createClip(self):
     # Try to create a clip, retry up to 4 times
-    self.notif(1)
+    self.notif("Creating clip...",kind="creation_start")
     retries = 4
     error_r = True
     print("Creating clip")
@@ -266,12 +266,12 @@ class twitchIntegration():
           url = data['data'][0]['edit_url']
           print("Clip created:",url)
           self.exportUrl(url)
-          self.notif(2)
+          self.notif("<font color='green'>Clip was created!</font>",kind="creation_success")
         elif response.status == 404:
           print(response.status,response.reason)
           error_msg = data['message']
           print(error_msg)
-          self.notif(4)
+          self.notif("<font color='red'>Channel is offline.</font>",kind="creation_error")
         else:
           print(response.status,response.reason)
           try:
@@ -285,12 +285,12 @@ class twitchIntegration():
         error_r = True
         retries -= 1
     if retries == 0:
-      self.notif(3)
+      self.notif("<font color='red'>Could not create clip.</font>",kind="creation_error")
 
   # Create clip
   def createMarker(self):
     # Try to create a marker, retry up to 4 times
-    self.notif(8)
+    self.notif("Creating marker...",kind="creation_start")
     retries = 4
     error_r = True
     print("Creating marker")
@@ -311,15 +311,15 @@ class twitchIntegration():
           hours = str(seconds//3600)
           minutes = str((seconds//60)%60).zfill(2)
           seconds = str(seconds%60).zfill(2)
-          timestamp = f"{hours}:{minutes}:{seconds} stream time"
+          timestamp = f"{hours}:{minutes}:{seconds}"
           print("Marker created at",timestamp)
-          self.notif(9,timestamp)
+          self.notif(f"<font color='green'>Marker was created at</font> {timestamp} <font color='green'>stream time.</font>",kind="creation_success")
         elif response.status == 404:
           print(response.status,response.reason)
           error = data['error']
           error_msg = data['message']
           print(error_msg)
-          self.notif(10)
+          self.notif(f"<font color='red'>Could not create marker:</font><br>{error_msg}",kind="creation_error")
         else:
           print(response.status,response.reason)
           try:
@@ -333,4 +333,4 @@ class twitchIntegration():
         error_r = True
         retries -= 1
     if retries == 0:
-      self.notif(10)
+      self.notif("<font color='red'>Could not create marker.</font>",kind="creation_error")

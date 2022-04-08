@@ -42,7 +42,7 @@ if __name__ == "__main__":
   window.stopOthers = stop
   twitch.raiseWindow = window.raiseTrigger
   twitch.updateWindow = window.updateLoginStatus
-  twitch.notif = window.updateStatus
+  twitch.notif = window.addStatusItem
   twitch.exportUrl = url_out.push
   keyboard.trigger = twitch.create
   url_out.stopExternal = window.stopExternal
@@ -52,9 +52,6 @@ if __name__ == "__main__":
 
   # Load configuration
   config.load()
-  
-  # Check for previous output file that might have been left from incorrectly closing the application
-  #url_out.finalizeOutput()
   
   # If application was started in tray, show notification
   if config.values["tray-on-startup"]:

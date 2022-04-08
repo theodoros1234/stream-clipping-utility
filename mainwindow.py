@@ -1,5 +1,5 @@
-from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QListWidget, QListWidgetItem
-from PySide2.QtGui import QKeySequence, QIcon, QBrush, Qt
+from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QTextEdit
+from PySide2.QtGui import QKeySequence, QTextOption, QIcon, QBrush, Qt
 from queue import Queue
 import random, time, threading, io, multiprocessing
 
@@ -7,6 +7,7 @@ import random, time, threading, io, multiprocessing
 class MainWindow(QWidget):
   # When closing window, 
   def closeEvent(self,event):
+    self.__running = False
     self.trayIcon.hide()
     if self.started:
       self.start_stop()
@@ -107,18 +108,32 @@ class MainWindow(QWidget):
     self.logoutButton.setEnabled(logoutEnable)
     self.checkStartConditions()
   
+  # Receives items placed in queue to be added to the status list
+  def __statusItemQueueListener(self):
+    while self.__running:
+      item = self.__statusItemQueue.get()
+      self.statusList.append(item)
+      self.__statusItemQueue.task_done()
+      time.sleep(0.016)
+      max_pos = self.statusList.verticalScrollBar().maximum()
+      self.statusList.verticalScrollBar().setValue(max_pos)
+  
+  # Sets the status label
   def setStatus(self,label):
     self.status.setText(f"<b>Status:</b> {label}")
   
-  def addStatusItem(self,label,color=None):
-    item = QListWidgetItem(time.asctime()+' '+label, listview=self.statusList)
-    if color != None:
-      item.setForeground(QBrush(color))
-    self.statusList.addItem(item)
-    item.setSelected(True)
-    time.sleep(0.016)
-    max_pos = self.statusList.verticalScrollBar().maximum()
-    self.statusList.verticalScrollBar().setValue(max_pos)
+  # Puts items that should be added to the status list, in queue
+  def addStatusItem(self,label,kind=None):
+    notif = False
+    
+    notif |= (kind=="creation_start") & self.config.values['clip-notif']
+    notif |= (kind=="creation_success") & self.config.values['clip-notif']
+    notif |= (kind=="creation_error") & self.config.values['error-notif']
+    notif |= (kind=="critical_error")
+    
+    self.__statusItemQueue.put(f"<font color='gray'>{time.asctime()}</font> {label}")
+    if notif:
+      self.trayIcon.showMessage("Stream Clipping Utility",label)
   
   # Updates status label with appropriate message.
   def updateStatus(self,event=0,data=""):
@@ -182,7 +197,7 @@ class MainWindow(QWidget):
       raise Exception("Invalid event code.")
     
     if message != None:
-      self.addStatusItem(message,color)
+      self.addStatusItem(message)
   
   # Raises window
   def raiseTrigger(self):
@@ -218,6 +233,10 @@ class MainWindow(QWidget):
       self.startButton.setText("Start")
       # Stops sources
       self.stopOthers()
+      # Leaves separator on status list
+      self.addStatusItem("--------------------------------")
+      # Updates status label
+      self.setStatus("Idle.")
     # Starts if not already started
     else:
       print("Starting")
@@ -228,15 +247,17 @@ class MainWindow(QWidget):
       self.startButton.setText("Stop")
       # Starts sources
       self.startOthers()
-    
-    # Updates status label
-    self.updateStatus()
+      # Updates status label
+      self.setStatus("Listening for input.")
   
-  # Handles stopping when an error occurs.
-  def stopExternal(self,msg="Unknown error, stopping.",isError=True):
+  # Handles stopping triggered externally, usually when a critical error occurs.
+  def stopExternal(self,msg=None,isError=True):
     if isError:
-      self.addStatusItem(msg,Qt.red)
-    else:
+      if msg==None:
+        self.addStatusItem(f"<font color='red'>Unknown error, stopping.</font>",kind="critical_error")
+      else:
+        self.addStatusItem(f"<font color='red'>{msg}</font>",kind="critical_error")
+    elif msg!=None:
       self.addStatusItem(msg)
     if self.started:
       self.start_stop()
@@ -247,7 +268,9 @@ class MainWindow(QWidget):
     self.config = None
     self.twitch = None
     self.started = False
-    self.__status_msg = {'main':'Please wait...'}
+    self.__running = True
+    self.__statusItemQueue = Queue()
+    threading.Thread(target=self.__statusItemQueueListener,daemon=True).start()
     
     # Main window layout
     self.appIcon = QIcon("icon.png")
@@ -289,14 +312,14 @@ class MainWindow(QWidget):
     self.mainLayout.addLayout(self.optionsLayout)
     # Options
     self.keyComboSelect = QKeySequenceEdit(self)
-    self.clipsEnabled = QCheckBox("Create clips")
+    self.clipsEnabled = QCheckBox("Create clips",self)
     self.clipsFilePathLayout = QHBoxLayout(self)
     self.clipsFilePath = QLineEdit(self)
     self.clipsFilePath.setReadOnly(True)
     self.clipsFilePathBrowse = QPushButton("Browse",self)
     self.clipsFilePathLayout.addWidget(self.clipsFilePath)
     self.clipsFilePathLayout.addWidget(self.clipsFilePathBrowse)
-    self.markersEnabled = QCheckBox("Create markers")
+    self.markersEnabled = QCheckBox("Create markers",self)
     self.clipNotif = QCheckBox("Show notification on successful clip/marker",self)
     self.errorNotif = QCheckBox("Show notification on error",self)
     self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
@@ -311,12 +334,13 @@ class MainWindow(QWidget):
     
     # Status display
     self.status = QLabel("<b>Status</b>",self)
-    self.statusList = QListWidget(self)
+    self.statusList = QTextEdit(self)
+    self.statusList.setReadOnly(True)
     self.status.setTextFormat(Qt.RichText)
     self.mainLayout.addStretch()
     self.mainLayout.addWidget(self.status)
     self.mainLayout.addWidget(self.statusList)
-    self.updateStatus()
+    self.setStatus("Idle.")
     
     # Button Layout
     self.buttonLayout = QHBoxLayout(self)

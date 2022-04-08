@@ -57,7 +57,7 @@ class keyboardSource():
       if self.stopExternal == None:
         self.stop()
       else:
-        self.stopExternal("Child process for keyboard monitoring ended unexpectedly.")
+        self.stopExternal("Child process for keyboard monitoring ended unexpectedly.",isError=True)
   
   # Start listening for hotkey
   def start(self):
@@ -81,7 +81,11 @@ class keyboardSource():
     if self.__linux_root:
       # Send stop signal to child processs
       if self.__proc_dead==False:
-        self.__child_proc.communicate("stop".encode("utf-8"),10)
+        try:
+          self.__child_proc.communicate("stop".encode("utf-8"),10)
+        except subprocess.TimeoutExpired:
+          self.__child_proc.kill()
+          print("Child process didn't stop after 10 seconds, so it was killed.")
     else:
       # Stop listening for the hotkey
       keyboard.remove_hotkey(self.__h_handle)
