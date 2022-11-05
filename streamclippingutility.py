@@ -47,12 +47,13 @@ if __name__ == "__main__":
   keyboard.trigger = twitch.create
   url_out.stopExternal = window.stopExternal
   keyboard.stopExternal = window.stopExternal
-  # Connect slots and signals
-  window.initSlots()
 
   # Load configuration
   config.load()
-  
+
+  # Connect slots and signals
+  window.initSlots()
+
   # If application was started in tray, show notification
   if config.values["tray-on-startup"]:
     window.trayIcon.showMessage("Stream Clipping Utility","Application has started hidden in tray.",window.appIcon)

@@ -4,3 +4,5 @@
 app.config
 *.pyc
 SCU_clip_output_*.html
+*.kdev4
+.kdev4

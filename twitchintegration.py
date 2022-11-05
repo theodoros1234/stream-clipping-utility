@@ -7,6 +7,7 @@ class twitchIntegration():
   # Login response from browser received
   def receivedLoginResponse(self):
     print("Stopping server and returning to application")
+    self.loginServer.shutdown()
     self.loginServer.server_close()
     if self.raiseWindow != None:
       self.raiseWindow()
@@ -65,6 +66,7 @@ class twitchIntegration():
             self.end_headers()
             return
           self.send_response(200)
+          self.end_headers()
           # Store token, save config and verify login
           self.parent.config.values['token'] = data[key][0].decode()
           threading.Thread(target=self.parent.receivedLoginResponse,daemon=True).start()

@@ -7,28 +7,36 @@ import random, time, threading, io, multiprocessing
 class MainWindow(QWidget):
   # When closing window, 
   def closeEvent(self,event):
+    self.__lock.acquire()
     self.__running = False
     self.trayIcon.hide()
+    self.__lock.release()
     if self.started:
       self.start_stop()
   
   # Toggle window visibility
   def toggleWindow(self):
+    self.__lock.acquire()
     self.setVisible(self.isHidden())
+    self.__lock.release()
   
   # Update config value of key sequence when changed through the GUI
   def keySequenceUpdate(self):
+    self.__lock.acquire()
     seq = self.keyComboSelect.keySequence().toString().lower()
+    #self.keyComboSelect.setKeySequence(QKeySequence(seq))
+    self.__lock.release()
     self.config.values['key-combo']=seq
-    self.keyComboSelect.setKeySequence(QKeySequence(seq))
     self.config.save()
     self.checkStartConditions()
   
   # Updates config values when changed through the GUI
   def clipsEnabledUpdate(self,val):
-    self.config.values['clips-enabled'] = val
+    self.__lock.acquire()
     self.clipsFilePath.setEnabled(val)
     self.clipsFilePathBrowse.setEnabled(val)
+    self.__lock.release()
+    self.config.values['clips-enabled'] = val
     self.config.save()
     self.checkStartConditions()
   def markersEnabledUpdate(self,val):
@@ -50,7 +58,9 @@ class MainWindow(QWidget):
   
   # Saves selected path to config and changes the appropriate GUI elements
   def clipsFilePathOpen(self,f):
+    self.__lock.acquire()
     self.clipsFilePath.setText(f)
+    self.__lock.release()
     self.config.values['clips-file-path'] = f
     self.config.save()
     self.checkStartConditions()
@@ -58,16 +68,19 @@ class MainWindow(QWidget):
   # Enables 'Start' button when appropriate conditions are met
   def checkStartConditions(self):
     cnd_met = True
-    
+
     if self.config.values['key-combo']=="" or self.twitch.status!=4:
       cnd_met = False
     if self.config.values['clips-enabled']==False and self.config.values['markers-enabled']==False:
       cnd_met = False
-    
+
+    self.__lock.acquire()
     self.startButton.setEnabled(cnd_met)
+    self.__lock.release()
   
   # Updates login status label
   def updateLoginStatus(self):
+    self.__lock.acquire()
     retryEnable = False
     loginEnable = False
     cancelEnable = False
@@ -106,24 +119,31 @@ class MainWindow(QWidget):
     self.loginButton.setEnabled(loginEnable)
     self.cancelButton.setEnabled(cancelEnable)
     self.logoutButton.setEnabled(logoutEnable)
+    self.__lock.release()
     self.checkStartConditions()
   
   # Receives items placed in queue to be added to the status list
   def __statusItemQueueListener(self):
     while self.__running:
       item = self.__statusItemQueue.get()
-      self.statusList.append(item)
       self.__statusItemQueue.task_done()
-      time.sleep(0.016)
+
+      self.__lock.acquire()
+      self.statusList.append(item)
+      time.sleep(0.017)
       max_pos = self.statusList.verticalScrollBar().maximum()
       self.statusList.verticalScrollBar().setValue(max_pos)
+      self.__lock.release()
   
   # Sets the status label
   def setStatus(self,label):
+    self.__lock.acquire()
     self.status.setText(f"<b>Status:</b> {label}")
+    self.__lock.release()
   
-  # Puts items that should be added to the status list, in queue
+  # Puts items that should be added to the status list, in queue, and sends notification if needed
   def addStatusItem(self,label,kind=None):
+    self.__lock.acquire()
     notif = False
     
     notif |= (kind=="creation_start") & self.config.values['clip-notif']
@@ -133,10 +153,25 @@ class MainWindow(QWidget):
     
     self.__statusItemQueue.put(f"<font color='gray'>{time.asctime()}</font> {label}")
     if notif:
-      self.trayIcon.showMessage("Stream Clipping Utility",label)
+      # Remove HTML tags for notifications
+      unHTMLed = str()
+      include = True
+      for c in label:
+        if include:
+          if c=='<':
+            include = False
+          else:
+            unHTMLed += c
+        else:
+          if c=='>':
+            include = True
+      self.trayIcon.showMessage("Stream Clipping Utility",unHTMLed)
+
+    self.__lock.release()
   
   # Updates status label with appropriate message.
   def updateStatus(self,event=0,data=""):
+    self.__lock.acquire()
     # event=0: No special event
     # event=1: Clip is being created
     # event=2: Clip has successfully been created
@@ -195,24 +230,30 @@ class MainWindow(QWidget):
         self.trayIcon.showMessage("Stream Clipping Utility",message)
     else:
       raise Exception("Invalid event code.")
+    self.__lock.release()
     
     if message != None:
       self.addStatusItem(message)
   
   # Raises window
   def raiseTrigger(self):
+    self.__lock.acquire()
     self.raise_()
     self.activateWindow()
+    self.__lock.release()
   
   # Enables/disabled most GUI elements
   def guiSetEnable(self,val):
     if val:
       self.updateLoginStatus()
     else:
+      self.__lock.acquire()
       self.loginButton.setEnabled(val)
       self.logoutButton.setEnabled(val)
       self.retryButton.setEnabled(val)
       self.cancelButton.setEnabled(val)
+      self.__lock.release()
+    self.__lock.acquire()
     self.keyComboSelect.setEnabled(val)
     self.clipsEnabled.setEnabled(val)
     self.clipsFilePath.setEnabled(val and self.config.values['clips-enabled'])
@@ -221,6 +262,7 @@ class MainWindow(QWidget):
     self.clipNotif.setEnabled(val)
     self.errorNotif.setEnabled(val)
     self.trayOnStartup.setEnabled(val)
+    self.__lock.release()
   
   def start_stop(self):
     # Stops if already started
@@ -230,7 +272,9 @@ class MainWindow(QWidget):
       # Re-enables most GUI elements
       self.guiSetEnable(True)
       # Changes button text
+      self.__lock.acquire()
       self.startButton.setText("Start")
+      self.__lock.release()
       # Stops sources
       self.stopOthers()
       # Leaves separator on status list
@@ -244,7 +288,9 @@ class MainWindow(QWidget):
       # Disables most GUI elements
       self.guiSetEnable(False)
       # Changes button text
+      self.__lock.acquire()
       self.startButton.setText("Stop")
+      self.__lock.release()
       # Starts sources
       self.startOthers()
       # Updates status label
@@ -270,6 +316,7 @@ class MainWindow(QWidget):
     self.started = False
     self.__running = True
     self.__statusItemQueue = Queue()
+    self.__lock = threading.Lock()
     threading.Thread(target=self.__statusItemQueueListener,daemon=True).start()
     
     # Main window layout
@@ -393,6 +440,7 @@ class MainWindow(QWidget):
   # Updates GUI when configuration file is loaded
   def onConfigLoad(self):
     v = self.config.values
+    self.__lock.acquire()
     self.keyComboSelect.setKeySequence(QKeySequence(v["key-combo"]))
     self.clipsEnabled.setChecked(v['clips-enabled'])
     self.clipsFilePath.setEnabled(v['clips-enabled'])
@@ -402,3 +450,4 @@ class MainWindow(QWidget):
     self.clipNotif.setChecked(v["clip-notif"])
     self.errorNotif.setChecked(v["error-notif"])
     self.trayOnStartup.setChecked(v["tray-on-startup"])
+    self.__lock.release()

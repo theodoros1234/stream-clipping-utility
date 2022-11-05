@@ -42,7 +42,7 @@ class urlOutput():
   # Handles exceptions
   def exp(self, e):
     print(type(e).__name__,e)
-    self.stopExternal("Clip URL Output:\n"+str(e),isError=True)
+    self.stopExternal("Clip URL Output exception:\n"+str(e),isError=True)
   
   # Closes file
   def stop(self):
