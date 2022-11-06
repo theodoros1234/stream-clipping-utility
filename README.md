@@ -1,6 +1,8 @@
 # stream-clipping-utility
-Desktop app that assigns a global hotkey to take clips for your Twitch live stream.
+Desktop app that assigns a global hotkey to take clips and markers for your Twitch live stream.
 
 Dependencies:
-- PySide2
-- keyboard
+- Python 3 (latest version recommended, might work with older python3 versions)
+- Qt5
+- PySide2 (python library)
+- keyboard (python library)
