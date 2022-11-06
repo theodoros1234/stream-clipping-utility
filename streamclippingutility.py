@@ -15,9 +15,11 @@ def start():
     url_out.start()
 
 # Stops all sources
-def stop():
+def stop(blocking=False):
   keyboard.stop()
+  twitch.busy.acquire()
   url_out.stop()
+  twitch.busy.release()
 
 
 # Main function

@@ -94,6 +94,7 @@ class twitchIntegration():
     self.config = None
     self.raiseWindow = None
     self.notif = None
+    self.busy = threading.Lock()
     # status 0: Not logged in
     # status 1: Validating token/login status
     # status 2: Waiting to receive login token from web browser
@@ -235,12 +236,17 @@ class twitchIntegration():
   
   # Create clip or marker, according to config
   def create(self):
-    self.apiComm = http.client.HTTPSConnection("api.twitch.tv")
-    # Change status message
-    if self.config.values['clips-enabled']:
-      self.createClip()
-    if self.config.values['markers-enabled']:
-      self.createMarker()
+    self.busy.acquire()
+    try:
+      self.apiComm = http.client.HTTPSConnection("api.twitch.tv")
+      # Change status message
+      if self.config.values['clips-enabled']:
+        self.createClip()
+      if self.config.values['markers-enabled']:
+        self.createMarker()
+    except BaseException as e:
+      print("Exception while creating clip/marker: "+e)
+    self.busy.release()
   
   # Create clip
   def createClip(self):
@@ -273,7 +279,7 @@ class twitchIntegration():
           print(response.status,response.reason)
           error_msg = data['message']
           print(error_msg)
-          self.notif("<font color='red'>Channel is offline.</font>",kind="creation_error")
+          self.notif("<font color='red'>Could not create clip: </font>Channel is offline.",kind="creation_error")
         else:
           print(response.status,response.reason)
           try:
@@ -321,7 +327,8 @@ class twitchIntegration():
           error = data['error']
           error_msg = data['message']
           print(error_msg)
-          self.notif(f"<font color='red'>Could not create marker:</font><br>{error_msg}",kind="creation_error")
+          short_error_msg = error_msg[error_msg.find('message:"')+9:error_msg.find('"',-1)]
+          self.notif(f"<font color='red'>Could not create marker:</font> {short_error_msg}",kind="creation_error")
         else:
           print(response.status,response.reason)
           try:

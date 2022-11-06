@@ -126,14 +126,15 @@ class MainWindow(QWidget):
   def __statusItemQueueListener(self):
     while self.__running:
       item = self.__statusItemQueue.get()
-      self.__statusItemQueue.task_done()
+      if self.__running:
+        self.__statusItemQueue.task_done()
 
-      self.__lock.acquire()
-      self.statusList.append(item)
-      time.sleep(0.017)
-      max_pos = self.statusList.verticalScrollBar().maximum()
-      self.statusList.verticalScrollBar().setValue(max_pos)
-      self.__lock.release()
+        self.__lock.acquire()
+        self.statusList.append(item)
+        time.sleep(0.017)
+        max_pos = self.statusList.verticalScrollBar().maximum()
+        self.statusList.verticalScrollBar().setValue(max_pos)
+        self.__lock.release()
   
   # Sets the status label
   def setStatus(self,label):
@@ -146,7 +147,6 @@ class MainWindow(QWidget):
     self.__lock.acquire()
     notif = False
     
-    notif |= (kind=="creation_start") & self.config.values['clip-notif']
     notif |= (kind=="creation_success") & self.config.values['clip-notif']
     notif |= (kind=="creation_error") & self.config.values['error-notif']
     notif |= (kind=="critical_error")
@@ -271,12 +271,12 @@ class MainWindow(QWidget):
       self.started = False
       # Re-enables most GUI elements
       self.guiSetEnable(True)
+      # Stops sources
+      self.stopOthers()
       # Changes button text
       self.__lock.acquire()
       self.startButton.setText("Start")
       self.__lock.release()
-      # Stops sources
-      self.stopOthers()
       # Leaves separator on status list
       self.addStatusItem("--------------------------------")
       # Updates status label
@@ -287,12 +287,12 @@ class MainWindow(QWidget):
       self.started = True
       # Disables most GUI elements
       self.guiSetEnable(False)
+      # Starts sources
+      self.startOthers()
       # Changes button text
       self.__lock.acquire()
       self.startButton.setText("Stop")
       self.__lock.release()
-      # Starts sources
-      self.startOthers()
       # Updates status label
       self.setStatus("Listening for input.")
   
@@ -317,7 +317,7 @@ class MainWindow(QWidget):
     self.__running = True
     self.__statusItemQueue = Queue()
     self.__lock = threading.Lock()
-    threading.Thread(target=self.__statusItemQueueListener,daemon=True).start()
+    threading.Thread(target=self.__statusItemQueueListener, daemon=True).start()
     
     # Main window layout
     self.appIcon = QIcon("icon.png")
