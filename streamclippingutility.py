@@ -1,6 +1,6 @@
 #!/bin/python3
 # This Python file uses the following encoding: utf-8
-import sys, threading
+import os, sys, threading, logging, time
 from configmanager import configManager
 from twitchintegration import twitchIntegration
 from mainwindow import MainWindow
@@ -24,6 +24,30 @@ def stop(blocking=False):
 
 # Main function
 if __name__ == "__main__":
+  # Configure logging
+  log_format = "%(asctime)s [%(levelname)s] %(message)s"
+  log_handlers = []
+  log_level = logging.DEBUG
+  # Output to terminal, if not running in Windows non-console mode
+  if sys.stderr!=None:
+    log_handlers.append(logging.StreamHandler())
+  try:
+    # If possible, try outputting to log file in scu_logs folder
+    if os.path.exists("scu_logs")==False:
+      os.mkdir("scu_logs")
+    log_handlers.append(logging.FileHandler(time.strftime("scu_logs/streamclippingutility_%Y%m%d_%H%M%S.log")))
+    logging.basicConfig(handlers=log_handlers, format=log_format, level=log_level)
+  except:
+    # Otherwise, output to a log file in the same folder
+    try:
+      log_handlers.append(logging.FileHandler(time.strftime("streamclippingutility_%Y%m%d_%H%M%S.log")))
+      logging.basicConfig(handlers=log_handlers, format=log_format, level=log_level)
+    except:
+      # If unable to output to a file and console output is available, output to console.
+      if len(log_handlers)!=0:
+        logging.basicConfig(handlers=log_handlers, format=log_format, level=log_level)
+  
+  logging.info("Initializing")
   # Create objects
   app = QApplication(sys.argv)
   config = configManager()

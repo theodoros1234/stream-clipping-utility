@@ -1,4 +1,4 @@
-import os
+import os, logging
 from PySide2.QtGui import QKeySequence
 
 default_client_id = "2ya1fhz3io1xhy9ao03ull3k8wwqff"
@@ -17,7 +17,7 @@ class configManager():
     if os.path.exists(self.fileLocation):
       try:
         with open(self.fileLocation,'r') as config_file:
-          print("Loading config file")
+          logging.info("Loading config file")
           # Go through each line, separate key from value, and store them in the config variable
           for line in config_file.readlines():
             separator_pos = line.find('=')
@@ -29,7 +29,7 @@ class configManager():
             self.values[key] = value
       except:
         # Show error dialog when there's an error loading the config file
-        print("Error loading config file. Using default config.")
+        logging.error("Error loading config file. Using default config.")
         window.configErrorDialog.showMessage("Error encountered while reading configuration info. Defaults will be used instead.")
     
     # Load default values for invalid or unset options
@@ -90,13 +90,12 @@ class configManager():
       self.values['markers-enabled'] = True
     
     # Print config
-    print("Loaded values:")
+    logging.debug("Loaded values:")
     for item in self.values.items():
       if item[0]=="token":
-        print("token=%s"%('*'*len(item[1])))
+        logging.debug("token=%s"%('*'*len(item[1])))
       else:
-        print("%s=%s"%(item[0],item[1]))
-    print()
+        logging.debug("%s=%s"%(item[0],item[1]))
     if self.loadTrigger != None:
       self.loadTrigger()
 
@@ -108,7 +107,8 @@ class configManager():
         # Write each line to the config file
         config_file.write("%s=%s\n"%(item[0],item[1]))
       config_file.close()
-      print("Updated config file")
+      logging.info("Updated config file")
     except:
+      logging.warning("Could not save configuration.")
       # Show error message in case something goes wrong
       window.configErrorDialog.showMessage("Could not save configuration.")

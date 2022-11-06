@@ -1,4 +1,4 @@
-import http.client, http.server, string, random, json, urllib.parse, threading, webbrowser
+import http.client, http.server, string, random, json, urllib.parse, threading, webbrowser, logging
 
 
 # Twitch integration class
@@ -6,7 +6,7 @@ class twitchIntegration():
   
   # Login response from browser received
   def receivedLoginResponse(self):
-    print("Stopping server and returning to application")
+    logging.info("Stopping server and returning to application")
     self.loginServer.shutdown()
     self.loginServer.server_close()
     if self.raiseWindow != None:
@@ -80,6 +80,11 @@ class twitchIntegration():
       else:
         self.send_response(401)
         self.end_headers()
+    
+    # Logging method
+    def log_message(self, format, *args):
+      message = f"{self.client_address[0]}:{str(self.client_address[1])}> " + format%args
+      logging.debug(message)
   
   # Init function
   def __init__(self):
@@ -104,7 +109,7 @@ class twitchIntegration():
   # Changes login status and triggers everything that also needs to be updated
   def changeStatus(self,new):
     self.status = int(new)
-    print("Updated login status to",new)
+    logging.debug("Updated login status to "+str(new))
     if self.updateWindow != None:
       self.updateWindow()
     
@@ -154,17 +159,17 @@ class twitchIntegration():
           break
       # If token is invalid, assume the user is not logged in and halt function execution
       if invalid:
-        print("Invalid characters found in token")
+        logging.error("Invalid characters found in token")
         self.changeStatus(0)
         return
       # Try connecting to twitch for verification
       try:
-        print("Verifying twitch access token")
+        logging.info("Verifying twitch access token")
         self.authComm = http.client.HTTPSConnection("id.twitch.tv",timeout=10)
         hd = {"Authorization": "Bearer " + self.config.values['token']}
         self.authComm.request('GET',"/oauth2/validate",headers=hd)
         response = self.authComm.getresponse()
-        print("Received response from Twitch server")
+        logging.debug("Received response from Twitch server")
         # Status indicates verification success
         if response.status == 200:
           try:
@@ -174,30 +179,30 @@ class twitchIntegration():
             self.user_id = data['user_id']
             # Verify that the appropriate scopes are allowed, otherwise consider user as not logged in
             if 'clips:edit' in data['scopes'] and 'channel:manage:broadcast' in data['scopes']:
-              print("Valid token with sufficient permissions")
+              logging.info("Valid token with sufficient permissions")
               self.changeStatus(4)
             else:
-              print("Valid token, but with insufficient permissions")
+              logging.warning("Valid token, but with insufficient permissions")
               self.changeStatus(0)
           except:
             # Response is invalid
-            print("Invalid response received")
+            logging.error("Invalid response received")
             self.loginError(1)
         # Status indicates invalid token, which means user is not logged in
         elif response.status == 401:
-          print("Invalid token")
+          logging.warning("Invalid token")
           self.changeStatus(0)
         # Response is invalid if reponse status is unexpected
         else:
-          print("Invalid response status received")
+          logging.error("Invalid response status received")
           self.loginError(1)
       # Error connecting to the server
       except:
         if self.cancelling:
-          print("Cancelled")
+          logging.info("Cancelled")
           self.loginError(2)
         else:
-          print("Could not connect to server")
+          logging.warning("Could not connect to server")
           self.loginError(0)
   
   # Log into a twitch account
@@ -232,7 +237,7 @@ class twitchIntegration():
     webbrowser.open(link)
     # Start server thread
     threading.Thread(target=self.loginServer.serve_forever,daemon=True).start()
-    print("Listening for response on port",port)
+    logging.info("Listening for response on port "+str(port))
   
   # Create clip or marker, according to config
   def create(self):
@@ -245,7 +250,7 @@ class twitchIntegration():
       if self.config.values['markers-enabled']:
         self.createMarker()
     except BaseException as e:
-      print("Exception while creating clip/marker: "+e)
+      logging.error("Exception while creating clip/marker: "+str(e))
     self.busy.release()
   
   # Create clip
@@ -254,7 +259,7 @@ class twitchIntegration():
     self.notif("Creating clip...",kind="creation_start")
     retries = 4
     error_r = True
-    print("Creating clip")
+    logging.info("Creating clip")
     while retries and error_r:
       error_r = False
       try:
@@ -272,24 +277,24 @@ class twitchIntegration():
         data = json.loads(response.read())
         if response.status == 202:
           url = data['data'][0]['edit_url']
-          print("Clip created:",url)
+          logging.info("Clip created: "+url)
           self.exportUrl(url)
           self.notif("<font color='green'>Clip was created!</font>",kind="creation_success")
         elif response.status == 404:
-          print(response.status,response.reason)
+          logging.info(f"{str(response.status)} {response.reason}")
           error_msg = data['message']
-          print(error_msg)
+          logging.info(error_msg)
           self.notif("<font color='red'>Could not create clip: </font>Channel is offline.",kind="creation_error")
         else:
-          print(response.status,response.reason)
+          logging.warning(f"{str(response.status)} {response.reason}")
           try:
-            print(data['error'])
+            logging.warning(data['error'])
           except:
             pass
           error_r = True
           retries -= 1
       except BaseException as exp:
-        print("Error while taking clip:",exp)
+        logging.error("Error while taking clip: "+str(exp))
         error_r = True
         retries -= 1
     if retries == 0:
@@ -301,7 +306,7 @@ class twitchIntegration():
     self.notif("Creating marker...",kind="creation_start")
     retries = 4
     error_r = True
-    print("Creating marker")
+    logging.info("Creating marker")
     while retries and error_r:
       error_r = False
       try:
@@ -320,25 +325,25 @@ class twitchIntegration():
           minutes = str((seconds//60)%60).zfill(2)
           seconds = str(seconds%60).zfill(2)
           timestamp = f"{hours}:{minutes}:{seconds}"
-          print("Marker created at",timestamp)
+          logging.info("Marker created at "+timestamp)
           self.notif(f"<font color='green'>Marker was created at</font> {timestamp} <font color='green'>stream time.</font>",kind="creation_success")
         elif response.status == 404:
-          print(response.status,response.reason)
+          logging.info(f"{str(response.status)} {response.reason}")
           error = data['error']
           error_msg = data['message']
-          print(error_msg)
+          logging.info(error_msg)
           short_error_msg = error_msg[error_msg.find('message:"')+9:error_msg.find('"',-1)]
           self.notif(f"<font color='red'>Could not create marker:</font> {short_error_msg}",kind="creation_error")
         else:
-          print(response.status,response.reason)
+          logging.warning(f"{str(response.status)} {response.reason}")
           try:
-            print(data['error'])
+            logging.warning(data['error'])
           except:
             pass
           error_r = True
           retries -= 1
       except BaseException as err:
-        print("Error while creating marker:",err)
+        logging.error("Error while creating marker: "+str(err))
         error_r = True
         retries -= 1
     if retries == 0:

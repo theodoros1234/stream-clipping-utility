@@ -1,7 +1,7 @@
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QTextEdit
 from PySide2.QtGui import QKeySequence, QTextOption, QIcon, QBrush, Qt
 from queue import Queue
-import random, time, threading, io, multiprocessing
+import random, time, threading, io, multiprocessing, logging
 
 # Main window class
 class MainWindow(QWidget):
@@ -267,7 +267,7 @@ class MainWindow(QWidget):
   def start_stop(self):
     # Stops if already started
     if self.started:
-      print("Stopping")
+      logging.info("Stopping")
       self.started = False
       # Re-enables most GUI elements
       self.guiSetEnable(True)
@@ -283,7 +283,7 @@ class MainWindow(QWidget):
       self.setStatus("Idle.")
     # Starts if not already started
     else:
-      print("Starting")
+      logging.info("Starting")
       self.started = True
       # Disables most GUI elements
       self.guiSetEnable(False)

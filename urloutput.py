@@ -1,4 +1,4 @@
-import os, platform, time
+import os, platform, time, logging
 
 
 # Determine separator character depending on host OS
@@ -41,7 +41,7 @@ class urlOutput():
   
   # Handles exceptions
   def exp(self, e):
-    print(type(e).__name__,e)
+    logging.critical(str(type(e).__name__)+str(e))
     self.stopExternal("Clip URL Output exception:\n"+str(e),isError=True)
   
   # Closes file

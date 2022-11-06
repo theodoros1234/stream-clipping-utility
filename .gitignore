@@ -7,3 +7,4 @@ SCU_clip_output_*.html
 *.kdev4
 .kdev4
 *.log
+scu_logs

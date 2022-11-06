@@ -1,5 +1,5 @@
 #!/bin/python3
-import keyboard, os, sys, platform, threading, subprocess
+import keyboard, os, sys, platform, threading, subprocess, logging
 
 # Keyboard listener/source object
 class keyboardSource():
@@ -52,7 +52,7 @@ class keyboardSource():
       if cmd=='trigger':
         self.trigger()
     if self.__stopping==False:
-      sys.stderr.write("Child process ended unexpectedly.\n")
+      logging.critical("Child process ended unexpectedly.")
       self.__proc_dead = True
       if self.stopExternal == None:
         self.stop()
@@ -85,7 +85,7 @@ class keyboardSource():
           self.__child_proc.communicate("stop".encode("utf-8"),10)
         except subprocess.TimeoutExpired:
           self.__child_proc.kill()
-          print("Child process didn't stop after 10 seconds, so it was killed.")
+          logging.warning("Child process didn't stop after 10 seconds, so it was killed.")
     else:
       # Stop listening for the hotkey
       keyboard.remove_hotkey(self.__h_handle)
