@@ -1,7 +1,9 @@
 from PySide2.QtWidgets import QApplication, QWidget, QHBoxLayout, QVBoxLayout, QFormLayout, QLabel, QPushButton, QKeySequenceEdit, QSpinBox, QCheckBox, QSystemTrayIcon, QMenu, QErrorMessage, QLineEdit, QFileDialog, QTextEdit
 from PySide2.QtGui import QKeySequence, QTextOption, QIcon, QBrush, Qt
 from queue import Queue
-import random, time, threading, io, multiprocessing, logging
+import random, time, threading, io, multiprocessing, logging, webbrowser, os
+
+apr1link = "https://www.youtube.com/watch?v=E9de-cmycx8"
 
 # Main window class
 class MainWindow(QWidget):
@@ -23,7 +25,7 @@ class MainWindow(QWidget):
   # Update config value of key sequence when changed through the GUI
   def keySequenceUpdate(self):
     self.__lock.acquire()
-    seq = self.keyComboSelect.keySequence().toString().lower()
+    #seq = self.keyComboSelect.keySequence().toString().lower()
     #self.keyComboSelect.setKeySequence(QKeySequence(seq))
     self.__lock.release()
     self.config.values['key-combo']=seq
@@ -67,12 +69,14 @@ class MainWindow(QWidget):
   
   # Enables 'Start' button when appropriate conditions are met
   def checkStartConditions(self):
-    cnd_met = True
-
-    if self.config.values['key-combo']=="" or self.twitch.status!=4:
-      cnd_met = False
-    if self.config.values['clips-enabled']==False and self.config.values['markers-enabled']==False:
-      cnd_met = False
+    cnd_met = (
+      (self.config.values['key-combo-v2'][1]!=0) and
+      (self.twitch.status==4) and
+      (
+        (not self.config.values['clips-enabled'] or os.path.isdir(self.config.values["clips-file-path"])) and
+        (self.config.values['clips-enabled'] or self.config.values['markers-enabled'])
+      )
+    )
 
     self.__lock.acquire()
     self.startButton.setEnabled(cnd_met)
@@ -110,7 +114,10 @@ class MainWindow(QWidget):
       else:
         msg = "Unknown error occured."
     elif self.twitch.status==4:
-      msg = "Logged in as " + self.twitch.username
+      if self.config.apr1trigger:
+        msg = "Logged in as <b><font color='red'>Rick Astley</font></b> (or " + self.twitch.username + ", actually)"
+      else:
+        msg = "Logged in as " + self.twitch.username
       self.loginButton.setText("Switch user")
       loginEnable = True
       logoutEnable = True
@@ -254,7 +261,8 @@ class MainWindow(QWidget):
       self.cancelButton.setEnabled(val)
       self.__lock.release()
     self.__lock.acquire()
-    self.keyComboSelect.setEnabled(val)
+    self.keyComboDisplay.setEnabled(val)
+    self.keyComboChange.setEnabled(val)
     self.clipsEnabled.setEnabled(val)
     self.clipsFilePath.setEnabled(val and self.config.values['clips-enabled'])
     self.clipsFilePathBrowse.setEnabled(val and self.config.values['clips-enabled'])
@@ -265,6 +273,9 @@ class MainWindow(QWidget):
     self.__lock.release()
   
   def start_stop(self):
+    # Launches different rickroll if it's April 1st
+    if self.config.apr1trigger:
+      webbrowser.open(apr1link)
     # Stops if already started
     if self.started:
       logging.info("Stopping")
@@ -307,16 +318,47 @@ class MainWindow(QWidget):
       self.addStatusItem(msg)
     if self.started:
       self.start_stop()
+
+  # Change trigger hotkey
+  def newHotkey(self):
+    self.__lock.acquire()
+    # Button says "Change"
+    if self.__getNewHotkeyThread == None:
+      # Change button to "Cancel" and call hotkey chooser
+      self.keyComboChange.setText("Cancel")
+      self.__getNewHotkeyThread = threading.Thread(target=self.getNewHotkey, args=(self.keyComboDisplay.setText, self.finishNewHotkey), daemon=True)
+      self.__getNewHotkeyThread.start()
+      self.__lock.release()
+
+    # Button says "Cancel"
+    else:
+      self.cancelHotkey()
+      self.__lock.release()
+      self.finishNewHotkey()
   
+  # Finish setting trigger hotkey
+  def finishNewHotkey(self):
+    self.__lock.acquire()
+    self.__getNewHotkeyThread = None
+    combo = self.config.values["key-combo-v2"]
+    self.keyComboDisplay.setText(self.hotkeyToString(combo[1], combo[0]))
+    self.keyComboChange.setText("Change")
+    self.__lock.release()
+    self.checkStartConditions()
+
   # Create window
   def __init__(self):
     super().__init__()
     self.config = None
     self.twitch = None
+    self.getNewHotkey = None
+    self.cancelHotkey = None
+    self.hotkeyToString = None
     self.started = False
     self.__running = True
     self.__statusItemQueue = Queue()
     self.__lock = threading.Lock()
+    self.__getNewHotkeyThread = None
     threading.Thread(target=self.__statusItemQueueListener, daemon=True).start()
     
     # Main window layout
@@ -333,6 +375,7 @@ class MainWindow(QWidget):
     # Login layout
     self.loginStatus = QLabel("Please wait...",self)
     self.loginStatus.setWordWrap(True)
+    self.loginStatus.setTextFormat(Qt.RichText)
     self.loginLayout = QHBoxLayout(self)
     self.mainLayout.addWidget(self.loginStatus)
     self.mainLayout.addLayout(self.loginLayout)
@@ -358,7 +401,13 @@ class MainWindow(QWidget):
     self.optionsLayout = QFormLayout(self)
     self.mainLayout.addLayout(self.optionsLayout)
     # Options
-    self.keyComboSelect = QKeySequenceEdit(self)
+    self.keyComboLayout = QHBoxLayout(self)
+    self.keyComboDisplay = QLineEdit("Not set", self)
+    self.keyComboDisplay.setReadOnly(True)
+    self.keyComboChange = QPushButton("Change", self)
+    self.keyComboLayout.addWidget(self.keyComboDisplay)
+    self.keyComboLayout.addWidget(self.keyComboChange)
+
     self.clipsEnabled = QCheckBox("Create clips",self)
     self.clipsFilePathLayout = QHBoxLayout(self)
     self.clipsFilePath = QLineEdit(self)
@@ -366,12 +415,13 @@ class MainWindow(QWidget):
     self.clipsFilePathBrowse = QPushButton("Browse",self)
     self.clipsFilePathLayout.addWidget(self.clipsFilePath)
     self.clipsFilePathLayout.addWidget(self.clipsFilePathBrowse)
+
     self.markersEnabled = QCheckBox("Create markers",self)
     self.clipNotif = QCheckBox("Show notification on successful clip/marker",self)
     self.errorNotif = QCheckBox("Show notification on error",self)
     self.trayOnStartup = QCheckBox("Minimize to tray on startup",self)
     
-    self.optionsLayout.addRow("Key Combination Trigger:",self.keyComboSelect)
+    self.optionsLayout.addRow("Key Combination Trigger:",self.keyComboLayout)
     self.optionsLayout.addRow(self.clipsEnabled)
     self.optionsLayout.addRow("Save clip links to (folder):",self.clipsFilePathLayout)
     self.optionsLayout.addRow(self.markersEnabled)
@@ -424,7 +474,8 @@ class MainWindow(QWidget):
     self.retryButton.clicked.connect(self.twitch.retry)
     self.cancelButton.clicked.connect(self.twitch.cancel)
     
-    self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
+    #self.keyComboSelect.editingFinished.connect(self.keySequenceUpdate)
+    self.keyComboChange.clicked.connect(self.newHotkey)
     self.clipsEnabled.toggled.connect(self.clipsEnabledUpdate)
     self.clipsFilePathBrowse.clicked.connect(self.clipsFilePathDialog.show)
     self.clipsFilePathDialog.fileSelected.connect(self.clipsFilePathOpen)
@@ -441,7 +492,9 @@ class MainWindow(QWidget):
   def onConfigLoad(self):
     v = self.config.values
     self.__lock.acquire()
-    self.keyComboSelect.setKeySequence(QKeySequence(v["key-combo"]))
+    #self.keyComboSelect.setKeySequence(QKeySequence(v["key-combo"]))
+    combo = self.config.values["key-combo-v2"]
+    self.keyComboDisplay.setText(self.hotkeyToString(combo[1], combo[0]))
     self.clipsEnabled.setChecked(v['clips-enabled'])
     self.clipsFilePath.setEnabled(v['clips-enabled'])
     self.clipsFilePath.setText(v['clips-file-path'])
@@ -450,4 +503,7 @@ class MainWindow(QWidget):
     self.clipNotif.setChecked(v["clip-notif"])
     self.errorNotif.setChecked(v["error-notif"])
     self.trayOnStartup.setChecked(v["tray-on-startup"])
+    if self.config.apr1trigger:
+      self.setWindowTitle("Stream RICK ROLL YOUR ASS Utility💀💀💀💀💀💀💀")
+      self.resize(720,520)
     self.__lock.release()

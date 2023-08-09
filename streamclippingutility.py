@@ -18,7 +18,8 @@ def start():
 def stop(blocking=False):
   keyboard.stop()
   twitch.busy.acquire()
-  url_out.stop()
+  if config.values['clips-enabled']:
+    url_out.stop()
   twitch.busy.release()
 
 
@@ -63,9 +64,13 @@ if __name__ == "__main__":
   url_out.config = config
   # Connect trigger functions between objects
   config.loadTrigger = window.onConfigLoad
+  config.configErrorDialog = window.configErrorDialog
   window.twitch = twitch
   window.startOthers = start
   window.stopOthers = stop
+  window.getNewHotkey = keyboard.newHotkey
+  window.cancelHotkey = keyboard.cancelHotkey
+  window.hotkeyToString = keyboard.hotkeyToString
   twitch.raiseWindow = window.raiseTrigger
   twitch.updateWindow = window.updateLoginStatus
   twitch.notif = window.addStatusItem
